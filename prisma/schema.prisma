@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. GESTIÓN DE USUARIOS DE LA PLATAFORMA
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  nombre        String
+  apellido      String
+  isSuperAdmin  Boolean        @default(false) // Para la administración general de la plataforma
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  membresias    EventMember[]  // Eventos en los que participa (Novio, Novia, Planner)
+}
+
+enum Role {
+  NOVIA
+  NOVIO
+  WEDDING_PLANNER
+  CO_ADMIN
+}
+
+// Tabla pivote para control de acceso colaborativo y roles en el evento
+model EventMember {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  role      Role
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId]) // Un usuario solo puede tener un rol por evento
+}
+
+// 2. EL EVENTO (BODA)
+model Event {
+  id                         String              @id @default(uuid())
+  titulo                     String
+  fecha                      DateTime
+  ubicacionCeremonia         String
+  ubicacionRecepcion         String
+  configPermiteAcompanantes  Boolean             @default(true) // <-- NUEVO: Controla el tipo de boda
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  members                    EventMember[]
+  invitados                  InvitadoPrincipal[]
+}
+
+// 3. GESTIÓN DE INVITADOS (ESTRUCTURA DE FLUJO RSVP)
+enum RsvpStatus {
+  PENDIENTE
+  CONFIRMADO
+  RECHAZADO
+}
+
+// El grupo o familia (quien recibe el enlace único)
+model InvitadoPrincipal {
+  id                String         @id @default(uuid())
+  eventId           String
+  codigoAcceso      String         @unique // Token corto para la URL (ej: "Andrea-y-Jose")
+  nombreFamilia     String         // Ej: "Familia Pérez Mendoza" o "Sr. Juan Carlos"
+  pasesTotales      Int            // Cantidad de pases asignados
+  statusRSVP        RsvpStatus     @default(PENDIENTE)
+  fechaConfirmacion DateTime?
+  observaciones     String?        // Mensaje que los invitados dejan a los novios
+  event             Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  asistentes        Asistente[]
+  paseDigital       PaseDigital?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+// Desglose individual de quién asiste realmente dentro del grupo
+model Asistente {
+  id                  String            @id @default(uuid())
+  invitadoPrincipalId String
+  nombreCompleto      String
+  asiste              Boolean           @default(false)
+  menuSeleccionado    String?           // Ej: Tradicional, Vegano, Gluten-Free
+  restricciones       String?           // Alergias específicas médicas
+  cancionSugerida     String?
+  invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
+}
+
+// 4. SEGURIDAD PREMIUM: QR DINÁMICO Y ACCESO EN PUERTA
+model PaseDigital {
+  id                  String            @id @default(uuid())
+  invitadoPrincipalId String            @unique
+  qrSecureToken       String            @unique // Token firmado que cambia/expira dinámicamente
+  asistentesEsperados Int               // Total que confirmó asistir en ese grupo
+  asistentesIngresados Int              @default(0) // Cuántos han cruzado la puerta real
+  validado            Boolean           @default(false)
+  fechaValidacion     DateTime?
+  invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
+}
