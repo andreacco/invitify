@@ -56,6 +56,21 @@ model Event {
   updatedAt                  DateTime            @updatedAt
   members                    EventMember[]
   invitados                  InvitadoPrincipal[]
+  template                   InvitationTemplate?
+}
+
+model InvitationTemplate {
+  id             String   @id @default(uuid())
+  eventId        String   @unique
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Estructura dinámica de diseño (Fuentes, colores, estilos de sobre, sello de cera, música)
+  estilos        Json     
+  
+  // Estructura de bloques activos (Texto de bienvenida, itinerario, dress code, mapas)
+  bloques        Json     
+  
+  updatedAt      DateTime @updatedAt
 }
 
 // 3. GESTIÓN DE INVITADOS (ESTRUCTURA DE FLUJO RSVP)
