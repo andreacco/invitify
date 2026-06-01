@@ -7,11 +7,11 @@ export async function GET(request: Request) {
   try {
     // 1. Validar autenticación
     const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
+    if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = (session.user as any).id as string;
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('eventId');
 
@@ -19,13 +19,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Falta el parámetro eventId.' }, { status: 400 });
     }
 
-    // 2. Verificar permisos del usuario
-    const membresia = await prisma.eventMember.findUnique({
-      where: { eventId_userId: { eventId, userId } }
+    // 2. Verificar permisos del usuario usando findFirst (Adiós al error de índice único)
+    const membresia = await prisma.eventMember.findFirst({
+      where: { 
+        eventId: eventId,
+        userId: userId 
+      }
     });
 
+    // 🧠 Control de seguridad extra: Si no es miembro invitado, revisamos si es el dueño (owner) del evento
     if (!membresia) {
-      return NextResponse.json({ error: 'No tienes permisos para ver esta lista.' }, { status: 403 });
+      const esDueno = await prisma.event.findFirst({
+        where: {
+          id: eventId,
+          ownerId: userId
+        }
+      });
+
+      if (!esDueno) {
+        return NextResponse.json({ error: 'No tienes permisos para ver esta lista.' }, { status: 403 });
+      }
     }
 
     // 3. Traer todos los invitados ordenados alfabéticamente con sus asistentes desglosados
@@ -33,7 +46,7 @@ export async function GET(request: Request) {
       where: { eventId },
       include: {
         asistentes: true,
-        paseDigital: true // Por si necesitamos saber en la tabla quién ya generó su QR
+        paseDigital: true 
       },
       orderBy: {
         nombreFamilia: 'asc'

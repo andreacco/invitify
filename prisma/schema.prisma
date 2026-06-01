@@ -11,69 +11,138 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ==========================================
 // 1. GESTIÓN DE USUARIOS DE LA PLATAFORMA
+// ==========================================
+
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  passwordHash  String
-  nombre        String
-  apellido      String
-  isSuperAdmin  Boolean        @default(false) // Para la administración general de la plataforma
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  membresias    EventMember[]  // Eventos en los que participa (Novio, Novia, Planner)
+  id                String               @id @default(uuid())
+  email             String               @unique
+  passwordHash      String
+  nombre            String
+  apellido          String
+  isSuperAdmin      Boolean              @default(false)
+  emailVerificado   Boolean              @default(false)
+  verificationToken String?              
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  
+  // 🚀 NUEVO: Relación directa con los eventos que este usuario ha creado (Dueño)
+  eventosCreados    Event[]              @relation("EventOwner")
+  
+  // Relación con los eventos donde este usuario colabora (Invitado por otros)
+  members           EventMember[] 
+  passwordResets    PasswordResetToken[] 
 }
 
-enum Role {
+// Nueva tabla para el control de expiración de restablecimiento de claves
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expires   DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+enum EventRole {
+  // Bodas
   NOVIA
   NOVIO
+  
+  // 15 Años y Cumpleaños
+  QUINCEANERA
+  CUMPLEANERO
+  ANFITRION
+  PAREJA_DEL_FESTEJADO
+  
+  // Padres (15 Años, Bautizos, Baby Showers, Comuniones)
+  MAMA_DEL_FESTEJADO
+  PAPA_DEL_FESTEJADO
+  
+  // Logística y General
   WEDDING_PLANNER
-  CO_ADMIN
+  ORGANIZADOR
+  ADMIN
+
+  PERSONALIZADO // <-- Agregamos esta opción para mapear cuando el usuario invente el rol
+}
+
+enum MemberStatus {
+  INVITADO    // El correo fue invitado pero aún no se registra/acepta
+  ACEPTADO    // Ya es miembro activo y puede co-gestionar el evento
 }
 
 // Tabla pivote para control de acceso colaborativo y roles en el evento
 model EventMember {
-  id        String   @id @default(uuid())
-  eventId   String
-  userId    String
-  role      Role
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id               String       @id @default(uuid())
+  eventId          String
+  userId           String?
+  correoInvitado   String       
+  role             EventRole
+  rolPersonalizado String?      
+  status           MemberStatus @default(INVITADO) 
+  event            Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
 
-  @@unique([eventId, userId]) // Un usuario solo puede tener un rol por evento
+  @@unique([eventId, correoInvitado])
 }
 
-// 2. EL EVENTO (BODA)
+// ==========================================
+// 2. EL EVENTO (MULTIPLATAFORMA INTELIGENTE)
+// ==========================================
+
+enum EventType {
+  BODA
+  QUINCEANOS
+  CUMPLEANOS
+  BABY_SHOWER
+  GRADUACION
+  PRIMERA_COMUNION
+  BAUTIZO
+  OTRO
+}
+
 model Event {
-  id                         String              @id @default(uuid())
-  titulo                     String
-  fecha                      DateTime
-  ubicacionCeremonia         String
-  ubicacionRecepcion         String
-  configPermiteAcompanantes  Boolean             @default(true) // <-- NUEVO: Controla el tipo de boda
-  createdAt                  DateTime            @default(now())
-  updatedAt                  DateTime            @updatedAt
-  members                    EventMember[]
-  invitados                  InvitadoPrincipal[]
-  template                   InvitationTemplate?
+  id                        String              @id @default(uuid())
+  titulo                    String              
+  tipo                      EventType           @default(BODA) 
+  fecha                     DateTime
+  slug                      String              @unique 
+  ubicacionCeremonia        String?             
+  ubicacionRecepcion        String              
+  configPermiteAcompanantes Boolean             @default(true) 
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  
+  // 🚀 NUEVO: Campo obligatorio que amarra el evento a su creador original
+  ownerId                   String
+  owner                     User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members                   EventMember[]
+  invitados                 InvitadoPrincipal[]
+  template                  InvitationTemplate?
 }
 
 model InvitationTemplate {
-  id             String   @id @default(uuid())
-  eventId        String   @unique
-  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   
   // Estructura dinámica de diseño (Fuentes, colores, estilos de sobre, sello de cera, música)
-  estilos        Json     
+  estilos   Json     
   
   // Estructura de bloques activos (Texto de bienvenida, itinerario, dress code, mapas)
-  bloques        Json     
+  bloques   Json     
   
-  updatedAt      DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
-// 3. GESTIÓN DE INVITADOS (ESTRUCTURA DE FLUJO RSVP)
+// ==========================================
+// 3. GESTIÓN DE INVITADOS (ESTRUCTURA RSVP)
+// ==========================================
+
 enum RsvpStatus {
   PENDIENTE
   CONFIRMADO
@@ -82,19 +151,20 @@ enum RsvpStatus {
 
 // El grupo o familia (quien recibe el enlace único)
 model InvitadoPrincipal {
-  id                String         @id @default(uuid())
+  id                String       @id @default(uuid())
   eventId           String
-  codigoAcceso      String         @unique // Token corto para la URL (ej: "Andrea-y-Jose")
-  nombreFamilia     String         // Ej: "Familia Pérez Mendoza" o "Sr. Juan Carlos"
-  pasesTotales      Int            // Cantidad de pases asignados
-  statusRSVP        RsvpStatus     @default(PENDIENTE)
+  codigoAcceso      String       @unique // Token corto para la URL (ej: "mami-2504")
+  nombreFamilia     String       // Ej: "Familia Paternina Osorio" o "Sr. Juan Carlos"
+  pasesTotales      Int          // Cantidad de pases asignados
+  statusRSVP        RsvpStatus   @default(PENDIENTE)
   fechaConfirmacion DateTime?
-  observaciones     String?        // Mensaje que los invitados dejan a los novios
-  event             Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  observaciones     String?      // Mensaje que los invitados dejan a los novios/anfitriones
+  telefono          String       // Guardado como string limpio de forma obligatoria
+  event             Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   asistentes        Asistente[]
   paseDigital       PaseDigital?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 }
 
 // Desglose individual de quién asiste realmente dentro del grupo
@@ -109,14 +179,17 @@ model Asistente {
   invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
 }
 
-// 4. SEGURIDAD PREMIUM: QR DINÁMICO Y ACCESO EN PUERTA
+// ==========================================
+// 4. SEGURIDAD: QR DINÁMICO Y ACCESO EN PUERTA
+// ==========================================
+
 model PaseDigital {
-  id                  String            @id @default(uuid())
-  invitadoPrincipalId String            @unique
-  qrSecureToken       String            @unique // Token firmado que cambia/expira dinámicamente
-  asistentesEsperados Int               // Total que confirmó asistir en ese grupo
-  asistentesIngresados Int              @default(0) // Cuántos han cruzado la puerta real
-  validado            Boolean           @default(false)
-  fechaValidacion     DateTime?
-  invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
+  id                   String            @id @default(uuid())
+  invitadoPrincipalId  String            @unique
+  qrSecureToken        String            @unique // Token firmado que cambia/expira dinámicamente
+  asistentesEsperados  Int               // Total que confirmó asistir en ese grupo
+  asistentesIngresados Int               @default(0) // Cuántos han cruzado la puerta real
+  validado             Boolean           @default(false)
+  fechaValidacion      DateTime?
+  invitadoPrincipal    InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
 }

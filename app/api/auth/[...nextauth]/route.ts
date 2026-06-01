@@ -36,6 +36,11 @@ export const authOptions: AuthOptions = {
         if (!isPasswordValid) {
           throw new Error('Contraseña incorrecta.');
         }
+        // Dentro de tu authorize() en [...nextauth]/route.ts, justo abajo del 'if (!isPasswordValid)':
+
+        if (!user.emailVerificado) {
+          throw new Error('Por favor, verifica tu correo electrónico antes de iniciar sesión.');
+        }
 
         // Devolvemos el usuario para armar el token (nunca el hash)
         console.log({id: user.id,
