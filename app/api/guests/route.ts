@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db'; 
 
 export const dynamic = 'force-dynamic';
@@ -8,8 +7,8 @@ export const dynamic = 'force-dynamic';
 // 1. OBTENER GRUPOS DE INVITADOS
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
     const eventId = "boda-andrea-jose-2026"; 
 
@@ -32,8 +31,8 @@ export async function GET() {
 // 2. CREAR UN NUEVO GRUPO O INVITADO
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
     const { nombreFamilia, pasesTotales, codigoAcceso, eventId, telefono } = body;

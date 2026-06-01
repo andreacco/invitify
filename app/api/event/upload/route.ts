@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -18,10 +17,8 @@ export async function POST(request: Request) {
     }
 
     // 2. Validar autenticación de sesión
-    const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-    }
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
     // 3. Extraer el archivo del FormData
     const formData = await request.formData();

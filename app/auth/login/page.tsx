@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { syncAuthSession } from '@/lib/auth/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { update } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -16,9 +18,11 @@ function LoginContent() {
 
   useEffect(() => {
     if (searchParams.get('registered') === 'true') {
-      setSuccessMsg('¡Cuenta creada con éxito! Por favor, verifica tu correo antes de iniciar sesión o ingresa tus credenciales.');
+      setSuccessMsg('¡Cuenta creada! Inicia sesión o revisa tu correo si aún no lo verificaste.');
     }
-    // Si viene rebotado por falta de verificación
+    if (searchParams.get('verified') === 'true') {
+      setSuccessMsg('¡Correo verificado! Ya puedes iniciar sesión.');
+    }
     if (searchParams.get('error') === 'unverified') {
       setError('Debes verificar tu correo electrónico antes de acceder al ecosistema.');
     }
@@ -37,21 +41,31 @@ function LoginContent() {
     });
 
     if (result?.error) {
-      // Manejo específico si Next-Auth rechaza el login por falta de verificación
-      if (result.error === 'EmailNotVerified') {
-        setError('Tu cuenta aún no ha sido verificada. Revisa tu bandeja de entrada.');
-        router.push('/auth/verify');
-      } else {
-        setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
-      }
+      setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
       setLoading(false);
-    } else {
-      // 🎯 REDIRECCIÓN AL DASHBOARD PRINCIPAL
-      // Dejamos que la raíz del dashboard decida si mostrar el Empty State, 
-      // ir al Wizard de nuevo evento, o mandarlo a verificar según su estado real en la DB
-      router.push('/dashboard');
-      router.refresh();
+      return;
     }
+
+    const synced = await syncAuthSession(update);
+    router.refresh();
+
+    if (!synced.authenticated) {
+      setError('No se pudo iniciar sesión. Intenta de nuevo.');
+      setLoading(false);
+      return;
+    }
+
+    if (!synced.emailVerified) {
+      router.push('/auth/verify');
+    } else {
+      const callbackUrl = searchParams.get('callbackUrl');
+      router.push(
+        callbackUrl && callbackUrl.startsWith('/dashboard')
+          ? callbackUrl
+          : '/dashboard'
+      );
+    }
+    setLoading(false);
   };
 
   return (

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
 // 💡 FIX: Tipamos params como una Promesa para cumplir con Next.js 15
@@ -9,10 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> } 
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-    }
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
     // 💡 FIX: Desempaquetamos de forma asíncrona la promesa de params antes de usar el ID
     const { id } = await params;

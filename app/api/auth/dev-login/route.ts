@@ -9,24 +9,26 @@ export async function GET() {
 
   try {
     // Definimos un usuario ficticio o tu propio ID de la base de datos
-    const user = {
-      id: 'dev-user-id-andrea',
-      name: 'Andrea Osorio',
-      email: 'andrea@example.com',
-      role: 'ADMIN'
-    };
-
-    // Crear el token usando la misma clave secreta de Next-Auth
     const token = await encode({
-      token: user,
-      secret: process.env.NEXTAUTH_SECRET || 'un_secret_muy_largo_y_seguro_de_prueba_123456789'
+      token: {
+        id: 'dev-user-id-andrea',
+        name: 'Andrea Osorio',
+        email: 'andrea@example.com',
+        isSuperAdmin: true,
+        emailVerificado: true,
+      },
+      secret: process.env.NEXTAUTH_SECRET || 'un_secret_muy_largo_y_seguro_de_prueba_123456789',
     });
 
     const cookieName = 'next-auth.session-token';
 
     const response = NextResponse.json({
       message: '¡Sesión de desarrollo iniciada correctamente! Ya puedes usar el editor.',
-      user
+      user: {
+        id: 'dev-user-id-andrea',
+        name: 'Andrea Osorio',
+        email: 'andrea@example.com',
+      },
     });
 
     // Inyectar la cookie directamente al navegador

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import ResumenTab from './ResumenTab';
 import InvitadosTab from './InvitadosTab';
 import ConfigTab from './ConfigTab';
@@ -66,6 +67,12 @@ export default function EventoDashboardPage() {
               <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
+            <Link
+              href={`/dashboard/eventos/${id}/invitacion`}
+              className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md shadow-purple-600/10 w-fit"
+            >
+              🎨 Diseñar invitación
+            </Link>
           </div>
           
           {/* Menú de Pestañas (Tabs Nav) */}

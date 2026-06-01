@@ -44,13 +44,12 @@ export default function RegisterPage() {
       });
 
       if (loginResult?.error) {
-        // Si el autologin falla por latencia, igual lo mandamos a verificar tradicionalmente
-        router.push(`/auth/login?registered=true&email=${encodeURIComponent(sanitizedEmail)}`);
+        router.push(
+          `/auth/login?registered=true&email=${encodeURIComponent(sanitizedEmail)}`
+        );
         return;
       }
 
-      // 🎯 3. REDIRECCIÓN Y ACTUALIZACIÓN DE ESTADO
-      // Refrescamos primero los componentes del servidor para reconocer la cookie de sesión y luego redirigimos
       router.refresh();
       router.push('/auth/verify');
 

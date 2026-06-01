@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
 function generarCodigoAcceso(nombre: string): string {
@@ -18,12 +17,10 @@ function generarCodigoAcceso(nombre: string): string {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-    }
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
-    const userId = (session.user as any).id;
+    const userId = auth.session.user.id;
     const body = await request.json();
     const { eventId, listaInvitados } = body;
 

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 import { sendEventInvitationEmail } from '@/lib/invitationMail'; 
 
@@ -13,15 +12,11 @@ interface ColaboradorInput {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    // 🛡️ Validación estricta para evitar el 'session.user is possibly undefined'
-    if (!session || !session.user || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-    }
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
-    const userId = (session.user as any).id;
-    const userEmail = session.user.email; 
+    const userId = auth.session.user.id;
+    const userEmail = auth.session.user.email; 
     const body = await request.json();
     
     const { 

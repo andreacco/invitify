@@ -1,17 +1,47 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
+import { userCanManageEvent } from '@/lib/event/permissions';
 
-// 1. POST: Guardar o actualizar la plantilla visual de la boda
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get('eventId');
+
+    if (!eventId) {
+      return NextResponse.json({ error: 'Falta el parámetro eventId.' }, { status: 400 });
     }
 
-    const userId = (session.user as any).id;
+    const puedeEditar = await userCanManageEvent(
+      auth.session.user.id,
+      auth.session.user.email,
+      eventId
+    );
+
+    if (!puedeEditar) {
+      return NextResponse.json({ error: 'No tienes permisos de edición.' }, { status: 403 });
+    }
+
+    const template = await prisma.invitationTemplate.findUnique({
+      where: { eventId },
+    });
+
+    return NextResponse.json({ template });
+  } catch (error) {
+    console.error('ERROR_GET_TEMPLATE_API:', error);
+    return NextResponse.json({ error: 'Error al cargar la plantilla.' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const userId = auth.session.user.id;
     const body = await request.json();
     const { eventId, estilos, bloques } = body;
 
@@ -19,16 +49,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan parámetros de diseño.' }, { status: 400 });
     }
 
-    // Verificar que quien edita el diseño sea administrador de este evento
-    const membresia = await prisma.eventMember.findUnique({
-      where: { eventId_userId: { eventId, userId } }
-    });
+    const puedeEditar = await userCanManageEvent(
+      userId,
+      auth.session.user.email,
+      eventId
+    );
 
-    if (!membresia) {
+    if (!puedeEditar) {
       return NextResponse.json({ error: 'No tienes permisos de edición.' }, { status: 403 });
     }
 
-    // Insertar o actualizar la plantilla en un solo paso
     const plantillaConfigurada = await prisma.invitationTemplate.upsert({
       where: { eventId },
       update: { estilos, bloques },
@@ -37,9 +67,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       message: 'Diseño de la invitación guardado con éxito.',
-      template: plantillaConfigurada
-    }, { status: 200 });
-
+      template: plantillaConfigurada,
+    });
   } catch (error) {
     console.error('ERROR_SAVE_TEMPLATE_API:', error);
     return NextResponse.json({ error: 'Error al guardar la plantilla.' }, { status: 500 });

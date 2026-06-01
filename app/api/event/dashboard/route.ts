@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
 export async function GET(request: Request) {
   try {
-    // 1. Validar autenticación
-    const session = await getServerSession(authOptions);
-    if (!session || !(session.user as any)?.id) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-    }
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
 
-    const userId = (session.user as any).id;
+    const userId = auth.session.user.id;
     
     // Obtener el eventId de los parámetros de la URL (?eventId=xxx)
     const { searchParams } = new URL(request.url);
