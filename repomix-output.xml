@@ -302,165 +302,6 @@ export async function GET() {
 }
 </file>
 
-<file path="app/api/rsvp/[codigoAcceso]/route.ts">
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import crypto from 'crypto';
-
-// ==========================================
-// 1. GET: CONSULTAR EL ESTADO DE LA INVITACIÓN
-// ==========================================
-export async function GET(
-  request: Request,
-  { params }: { params: { codigoAcceso: string } }
-) {
-  try {
-    const { codigoAcceso } = params;
-
-    // Buscar el grupo familiar por su código único de invitación
-    const invitacion = await prisma.invitadoPrincipal.findUnique({
-      where: { codigoAcceso },
-      include: {
-        asistentes: true, // Nos traemos el desglose de los miembros de la familia
-        paseDigital: true // Si ya confirmaron antes, nos traemos su pase
-      }
-    });
-
-    if (!invitacion) {
-      return NextResponse.json(
-        { error: 'Invitación no encontrada. Verifica el enlace.' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ invitacion }, { status: 200 });
-
-  } catch (error) {
-    console.error('ERROR_RSVP_GET_API:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener los datos de la invitación.' },
-      { status: 500 }
-    );
-  }
-}
-
-// ==========================================
-// 2. POST: CONFIRMAR ASISTENCIA (FORMULARIO RSVP)
-// ==========================================
-export async function POST(
-  request: Request,
-  { params }: { params: { codigoAcceso: string } }
-) {
-  try {
-    const { codigoAcceso } = params;
-    const body = await request.json();
-    
-    // respuestasAsistentes será un array de objetos con el id de cada asistente, 
-    // si asiste, su menú, restricciones y canción sugerida.
-    const { respuestasAsistentes, observaciones } = body;
-
-    if (!respuestasAsistentes || !Array.isArray(respuestasAsistentes)) {
-      return NextResponse.json(
-        { error: 'El formato de las respuestas es inválido.' },
-        { status: 400 }
-      );
-    }
-
-    // 1. Validar que la invitación exista
-    const invitacion = await prisma.invitadoPrincipal.findUnique({
-      where: { codigoAcceso },
-      include: { asistentes: true }
-    });
-
-    if (!invitacion) {
-      return NextResponse.json({ error: 'Invitación no encontrada.' }, { status: 404 });
-    }
-
-    // 2. Procesar la confirmación dentro de una Transacción
-    const resultadoRSVP = await prisma.$transaction(async (tx) => {
-      let totalAsistentesConfirmados = 0;
-
-      // A. Actualizar cada asistente individualmente con sus preferencias de menú/alergias
-      for (const res of respuestasAsistentes) {
-        // Verificar que el asistente realmente pertenezca a esta familia
-        const pertenece = invitacion.asistentes.some(a => a.id === res.id);
-        if (!pertenece) continue;
-
-        if (res.asiste) {
-          totalAsistentesConfirmados++;
-        }
-
-        await tx.asistente.update({
-          where: { id: res.id },
-          data: {
-            asiste: res.asiste,
-            menuSeleccionado: res.asiste ? res.menuSeleccionado : null,
-            restricciones: res.asiste ? res.restricciones : null,
-            cancionSugerida: res.cancionSugerida || null
-          }
-        });
-      }
-
-      // B. Determinar el estatus global del grupo familiar
-      let statusGlobal = 'RECHAZADO';
-      if (totalAsistentesConfirmados > 0) {
-        statusGlobal = 'CONFIRMADO';
-      }
-
-      // C. Actualizar la cabecera de la invitación
-      const invitacionActualizada = await tx.invitadoPrincipal.update({
-        where: { id: invitacion.id },
-        data: {
-          statusRSVP: statusGlobal as any,
-          fechaConfirmacion: new Date(),
-          observaciones: observaciones || null
-        }
-      });
-
-      // D. SISTEMA PREMIUM: Generar el Pase Digital con Token Dinámico si alguien asiste
-      if (totalAsistentesConfirmados > 0) {
-        // Generamos un hash único aleatorio que servirá como la semilla inicial del QR
-        const tokenSeguroInicial = crypto.randomBytes(32).toString('hex');
-
-        // Upsert por si el invitado cambia de opinión y re-confirma el formulario antes de la boda
-        await tx.paseDigital.upsert({
-          where: { invitadoPrincipalId: invitacion.id },
-          update: {
-            qrSecureToken: tokenSeguroInicial,
-            asistentesEsperados: totalAsistentesConfirmados,
-            validado: false
-          },
-          create: {
-            invitadoPrincipalId: invitacion.id,
-            qrSecureToken: tokenSeguroInicial,
-            asistentesEsperados: totalAsistentesConfirmados,
-          }
-        });
-      } else {
-        // Si al final confirmaron que van 0 personas, eliminamos el pase digital si existía
-        await tx.paseDigital.deleteMany({
-          where: { invitadoPrincipalId: invitacion.id }
-        });
-      }
-
-      return invitacionActualizada;
-    });
-
-    return NextResponse.json({
-      message: 'Confirmación procesada con éxito.',
-      statusRSVP: resultadoRSVP.statusRSVP
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('ERROR_RSVP_POST_API:', error);
-    return NextResponse.json(
-      { error: 'Error interno al procesar el RSVP.' },
-      { status: 500 }
-    );
-  }
-}
-</file>
-
 <file path="app/auth/forgot-password/page.tsx">
 'use client';
 
@@ -3658,314 +3499,6 @@ export async function GET(
 }
 </file>
 
-<file path="app/api/event/checkin/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
-
-export async function POST(request: Request) {
-  try {
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    const userId = auth.session.user.id;
-    const body = await request.json();
-    const { qrSecureToken, eventId } = body;
-
-    if (!qrSecureToken || !eventId) {
-      return NextResponse.json(
-        { error: 'Faltan parámetros obligatorios (Token del QR o ID del evento).' },
-        { status: 400 }
-      );
-    }
-
-    // 2. Verificar que el usuario que escanea realmente tiene un rol autorizado para este evento
-    const membresiaStaff = await prisma.eventMember.findUnique({
-      where: {
-        eventId_userId: { eventId, userId }
-      }
-    });
-
-    if (!membresiaStaff) {
-      return NextResponse.json(
-        { error: 'No tienes permisos de Staff para realizar check-in en este evento.' },
-        { status: 403 }
-      );
-    }
-
-    // 3. Buscar el Pase Digital correspondiente al token escaneado
-    const pase = await prisma.paseDigital.findUnique({
-      where: { qrSecureToken },
-      include: {
-        invitadoPrincipal: {
-          include: {
-            asistentes: {
-              where: { asiste: true } // Traer solo a los que confirmaron previamente
-            }
-          }
-        }
-      }
-    });
-
-    // 4. Validaciones de control de acceso físico
-    if (!pase || pase.invitadoPrincipal.eventId !== eventId) {
-      return NextResponse.json(
-        { valid: false, error: 'Código QR inválido o no pertenece a este evento.' },
-        { status: 404 }
-      );
-    }
-
-    if (pase.validado) {
-      return NextResponse.json({
-        valid: false,
-        error: '¡ALERTA! Este pase ya fue utilizado.',
-        fechaIngreso: pase.fechaValidacion,
-        familia: pase.invitadoPrincipal.nombreFamilia
-      }, { status: 400 });
-    }
-
-    // 5. Registrar el ingreso exitoso en la base de datos
-    const paseValidado = await prisma.paseDigital.update({
-      where: { id: pase.id },
-      data: {
-        validado: true,
-        fechaValidacion: new Date()
-      }
-    });
-
-    // 6. Responder con toda la información necesaria para la interfaz de la Planner
-    return NextResponse.json({
-      valid: true,
-      message: '¡Acceso Concedido Exitosamente!',
-      datosAcceso: {
-        familia: pase.invitadoPrincipal.nombreFamilia,
-        asistentesEsperados: pase.asistentesEsperados,
-        nombresAsistentes: pase.invitadoPrincipal.asistentes.map(a => a.nombreCompleto),
-        horaIngreso: paseValidado.fechaValidacion
-      }
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('ERROR_CHECKIN_QR_API:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor al procesar el check-in.' },
-      { status: 500 }
-    );
-  }
-}
-</file>
-
-<file path="app/api/event/dashboard/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
-
-export async function GET(request: Request) {
-  try {
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    const userId = auth.session.user.id;
-    
-    // Obtener el eventId de los parámetros de la URL (?eventId=xxx)
-    const { searchParams } = new URL(request.url);
-    const eventId = searchParams.get('eventId');
-
-    if (!eventId) {
-      return NextResponse.json({ error: 'Falta el parámetro eventId.' }, { status: 400 });
-    }
-
-    // 2. Verificar que el usuario pertenece al evento
-    const membresia = await prisma.eventMember.findUnique({
-      where: { eventId_userId: { eventId, userId } }
-    });
-
-    if (!membresia) {
-      return NextResponse.json({ error: 'No tienes permisos para ver este evento.' }, { status: 403 });
-    }
-
-    // 3. Consultas simultáneas en la base de datos para optimizar rendimiento
-    const [invitadosPrincipales, asistentes] = await prisma.$transaction([
-      // Conteo de grupos/invitaciones por estatus RSVP
-      prisma.invitadoPrincipal.findMany({
-        where: { eventId },
-        select: { statusRSVP: true, pasesTotales: true }
-      }),
-      // Conteo de asistentes individuales confirmados reales
-      prisma.asistente.findMany({
-        where: { invitadoPrincipal: { eventId } },
-        select: { asiste: true, menuSeleccionado: true, restricciones: true }
-      })
-    ]);
-
-    // 4. Procesar métricas de Invitaciones (Grupos)
-    let totalInvitaciones = invitadosPrincipales.length;
-    let rsvpConfirmados = 0;
-    let rsvpRechazados = 0;
-    let rsvpPendientes = 0;
-    let totalPasesAsignados = 0;
-
-    invitadosPrincipales.forEach(inv => {
-      totalPasesAsignados += inv.pasesTotales;
-      if (inv.statusRSVP === 'CONFIRMADO') rsvpConfirmados++;
-      else if (inv.statusRSVP === 'RECHAZADO') rsvpRechazados++;
-      else rsvpPendientes++;
-    });
-
-    // 5. Procesar métricas de Asistentes Individuales (Sillas Reales)
-    let totalAsistentesConfirmados = 0;
-    const menus: Record<string, number> = {};
-    const restriccionesAlimentarias: string[] = [];
-
-    asistentes.forEach(asist => {
-      if (asist.asiste) {
-        totalAsistentesConfirmados++;
-        
-        // Agrupar menús
-        const menu = asist.menuSeleccionado || 'No especificado';
-        menus[menu] = (menus[menu] || 0) + 1;
-
-        // Recolectar alergias/restricciones si existen
-        if (asist.restricciones && asist.restricciones.trim() !== '') {
-          restriccionesAlimentarias.push(asist.restricciones.trim());
-        }
-      }
-    });
-
-    // 6. Responder con el objeto estructurado para las gráficas del Front
-    return NextResponse.json({
-      resumenInvitaciones: {
-        totalInvitaciones,
-        confirmadas: rsvpConfirmados,
-        rechazadas: rsvpRechazados,
-        pendientes: rsvpPendientes
-      },
-      resumenAsistenciaReal: {
-        totalPasesAsignados,
-        sillasOcupadasReales: totalAsistentesConfirmados,
-        sillasVaciasOcupadas: totalPasesAsignados - totalAsistentesConfirmados
-      },
-      menus,
-      restriccionesAlimentarias
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('ERROR_DASHBOARD_GET_API:', error);
-    return NextResponse.json({ error: 'Error al obtener métricas del dashboard.' }, { status: 500 });
-  }
-}
-</file>
-
-<file path="app/api/event/invitados/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
-
-function generarCodigoAcceso(nombre: string): string {
-  const base = nombre
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-  
-  const sufijoAleatorio = Math.random().toString(36).substring(2, 6);
-  return `${base}-${sufijoAleatorio}`;
-}
-
-export async function POST(request: Request) {
-  try {
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    const userId = auth.session.user.id;
-    const body = await request.json();
-    const { eventId, listaInvitados } = body;
-
-    if (!eventId || !listaInvitados || !Array.isArray(listaInvitados)) {
-      return NextResponse.json({ error: 'Formato incorrecto.' }, { status: 400 });
-    }
-
-    // 1. Obtener el evento para verificar permisos Y leer su configuración
-    const eventoConfig = await prisma.event.findUnique({
-      where: { id: eventId },
-      include: {
-        members: { where: { userId } }
-      }
-    });
-
-    if (!eventoConfig || eventoConfig.members.length === 0) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para administrar este evento.' },
-        { status: 403 }
-      );
-    }
-
-    const permiteAcompanantes = eventoConfig.configPermiteAcompanantes;
-
-    // 2. Procesar la carga masiva adaptada a las reglas de la boda
-    const resultado = await prisma.$transaction(async (tx) => {
-      const registrosCreados = [];
-
-      for (const invitado of listaInvitados) {
-        const { nombreFamilia, pasesTotales, nombresAsistentes } = invitado;
-
-        if (!nombreFamilia) continue;
-
-        let pasesFinales = 1;
-        let listaAsistentesFinales: string[] = [];
-
-        if (permiteAcompanantes) {
-          // MODALIDAD TRADICIONAL: Respeta el Excel con grupos, +1 y familias
-          pasesFinales = parseInt(pasesTotales) || 1;
-          listaAsistentesFinales = Array.isArray(nombresAsistentes) && nombresAsistentes.length > 0
-            ? nombresAsistentes 
-            : [nombreFamilia];
-        } else {
-          // MODALIDAD INDIVIDUAL (Tu Boda): Cada fila es una persona única y no hay pases extra
-          pasesFinales = 1;
-          listaAsistentesFinales = [nombreFamilia]; // El "nombreFamilia" actúa directamente como el nombre completo del invitado único
-        }
-
-        const codigoAcceso = generarCodigoAcceso(nombreFamilia);
-
-        const nuevoGrupo = await tx.invitadoPrincipal.create({
-          data: {
-            eventId,
-            nombreFamilia, // Si es individual, este campo guarda el nombre de la persona
-            pasesTotales: pasesFinales,
-            codigoAcceso,
-            asistentes: {
-              create: listaAsistentesFinales.map((nombre: string) => ({
-                nombreCompleto: nombre,
-                asiste: false,
-              })),
-            },
-          },
-          include: {
-            asistentes: true,
-          },
-        });
-
-        registrosCreados.push(nuevoGrupo);
-      }
-
-      return registrosCreados;
-    });
-
-    return NextResponse.json({ 
-      message: `Procesados exitosamente ${resultado.length} invitados en modo ${permiteAcompanantes ? 'Familiar/Grupal' : 'Individual/Personal'}.`, 
-      invitados: resultado 
-    }, { status: 201 });
-
-  } catch (error) {
-    console.error('ERROR_BULK_INVITADOS_CON_CONFIG_API:', error);
-    return NextResponse.json({ error: 'Error al cargar invitados.' }, { status: 500 });
-  }
-}
-</file>
-
 <file path="app/api/event/list/route.ts">
 import { NextResponse } from 'next/server';
 import { requireVerifiedApiSession } from '@/lib/auth/session';
@@ -4212,33 +3745,6 @@ export async function POST(request: Request) {
 }
 </file>
 
-<file path="app/api/guests/[id]/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    const { id } = params;
-
-    await prisma.invitadoPrincipal.delete({
-      where: { id }
-    });
-
-    return NextResponse.json({ message: 'Grupo de invitados eliminado con éxito (Cascada activada).' });
-  } catch (error) {
-    console.error('PRISMA_DELETE_GUEST_ERROR:', error);
-    return NextResponse.json({ error: 'Error al eliminar el invitado.' }, { status: 500 });
-  }
-}
-</file>
-
 <file path="app/api/guests/route.ts">
 import { NextResponse } from 'next/server';
 import { requireVerifiedApiSession } from '@/lib/auth/session';
@@ -4318,6 +3824,167 @@ export async function POST(request: Request) {
       error: 'Error al registrar el invitado en Prisma.',
       details: error.message 
     }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/rsvp/[codigoAcceso]/route.ts">
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
+
+// ==========================================
+// 1. GET: CONSULTAR EL ESTADO DE LA INVITACIÓN
+// ==========================================
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ codigoAcceso: string }> }
+) {
+  try {
+    const { codigoAcceso } = await params;
+
+    // Buscar el grupo familiar por su código único de invitación
+    const invitacion = await prisma.invitadoPrincipal.findUnique({
+      where: { codigoAcceso },
+      include: {
+        asistentes: true, // Nos traemos el desglose de los miembros de la familia
+        paseDigital: true // Si ya confirmaron antes, nos traemos su pase
+      }
+    });
+
+    if (!invitacion) {
+      return NextResponse.json(
+        { error: 'Invitación no encontrada. Verifica el enlace.' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ invitacion }, { status: 200 });
+
+  } catch (error) {
+    console.error('ERROR_RSVP_GET_API:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener los datos de la invitación.' },
+      { status: 500 }
+    );
+  }
+}
+
+// ==========================================
+// 2. POST: CONFIRMAR ASISTENCIA (FORMULARIO RSVP)
+// ==========================================
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ codigoAcceso: string }> } // 1. Agregamos Promise aquí
+) {
+  try {
+    const { codigoAcceso } = await params; // 2. Agregamos await aquí
+    const body = await request.json();
+    
+    // respuestasAsistentes será un array de objetos con el id de cada asistente, 
+   // si asiste, su menú, restricciones y canción sugerida.
+    const { respuestasAsistentes, observaciones } = body;
+
+    if (!respuestasAsistentes || !Array.isArray(respuestasAsistentes)) {
+      return NextResponse.json(
+        { error: 'El formato de las respuestas es inválido.' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Validar que la invitación exista
+    const invitacion = await prisma.invitadoPrincipal.findUnique({
+      where: { codigoAcceso },
+      include: { asistentes: true }
+    });
+
+    if (!invitacion) {
+      return NextResponse.json({ error: 'Invitación no encontrada.' }, { status: 404 });
+    }
+
+// 2. Procesar la confirmación dentro de una Transacción
+    const resultadoRSVP = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      let totalAsistentesConfirmados = 0;
+
+      // A. Actualizar cada asistente individualmente con sus preferencias de menú/alergias
+      for (const res of respuestasAsistentes) {
+        // Tipamos 'a' para que TypeScript sepa que es un objeto con un 'id'
+        const pertenece = invitacion.asistentes.some((a: { id: string }) => a.id === res.id);
+        
+        if (!pertenece) continue;
+
+        if (res.asiste) {
+          totalAsistentesConfirmados++;
+        }
+
+        await tx.asistente.update({
+          where: { id: res.id },
+          data: {
+            asiste: res.asiste,
+            menuSeleccionado: res.asiste ? res.menuSeleccionado : null,
+            restricciones: res.asiste ? res.restricciones : null,
+            cancionSugerida: res.cancionSugerida || null
+          }
+        });
+      }
+
+      // B. Determinar el estatus global del grupo familiar
+      let statusGlobal = 'RECHAZADO';
+      if (totalAsistentesConfirmados > 0) {
+        statusGlobal = 'CONFIRMADO';
+      }
+
+      // C. Actualizar la cabecera de la invitación
+      const invitacionActualizada = await tx.invitadoPrincipal.update({
+        where: { id: invitacion.id },
+        data: {
+          statusRSVP: statusGlobal as any,
+          fechaConfirmacion: new Date(),
+          observaciones: observaciones || null
+        }
+      });
+
+      // D. SISTEMA PREMIUM: Generar el Pase Digital con Token Dinámico si alguien asiste
+      if (totalAsistentesConfirmados > 0) {
+        // Generamos un hash único aleatorio que servirá como la semilla inicial del QR
+        const tokenSeguroInicial = crypto.randomBytes(32).toString('hex');
+
+        // Upsert por si el invitado cambia de opinión y re-confirma el formulario antes de la boda
+        await tx.paseDigital.upsert({
+          where: { invitadoPrincipalId: invitacion.id },
+          update: {
+            qrSecureToken: tokenSeguroInicial,
+            asistentesEsperados: totalAsistentesConfirmados,
+            validado: false
+          },
+          create: {
+            invitadoPrincipalId: invitacion.id,
+            qrSecureToken: tokenSeguroInicial,
+            asistentesEsperados: totalAsistentesConfirmados,
+          }
+        });
+      } else {
+        // Si al final confirmaron que van 0 personas, eliminamos el pase digital si existía
+        await tx.paseDigital.deleteMany({
+          where: { invitadoPrincipalId: invitacion.id }
+        });
+      }
+
+      return invitacionActualizada;
+    });
+
+    return NextResponse.json({
+      message: 'Confirmación procesada con éxito.',
+      statusRSVP: resultadoRSVP.statusRSVP
+    }, { status: 200 });
+
+  } catch (error) {
+    console.error('ERROR_RSVP_POST_API:', error);
+    return NextResponse.json(
+      { error: 'Error interno al procesar el RSVP.' },
+      { status: 500 }
+    );
   }
 }
 </file>
@@ -5321,49 +4988,6 @@ yarn-error.log*
 next-env.d.ts
 </file>
 
-<file path="package.json">
-{
-  "name": "invitify",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "postinstall": "prisma generate"
-  },
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "@supabase/supabase-js": "^2.106.2",
-    "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.3",
-    "next": "16.2.6",
-    "next-auth": "^4.24.14",
-    "pg": "^8.21.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "resend": "^6.12.4",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/bcrypt": "^6.0.0",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
-    "@types/pg": "^8.20.0",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "prisma": "^7.8.0",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
-}
-</file>
-
 <file path="proxy.ts">
 /**
  * Capa 1 — Red de borde (Next.js 16 proxy).
@@ -5505,6 +5129,104 @@ import { authOptions } from '@/lib/auth/options';
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
+</file>
+
+<file path="app/api/event/checkin/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+export async function POST(request: Request) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const userId = auth.session.user.id;
+    const body = await request.json();
+    const { qrSecureToken, eventId } = body;
+
+    if (!qrSecureToken || !eventId) {
+      return NextResponse.json(
+        { error: 'Faltan parámetros obligatorios (Token del QR o ID del evento).' },
+        { status: 400 }
+      );
+    }
+
+  // 2. Verificar que el usuario que escanea realmente tiene un rol autorizado para este evento
+    const membresiaStaff = await prisma.eventMember.findFirst({
+      where: {
+        eventId: eventId,
+        userId: userId
+      }
+    });
+
+    if (!membresiaStaff) {
+      return NextResponse.json(
+        { error: 'No tienes permisos de Staff para realizar check-in en este evento.' },
+        { status: 403 }
+      );
+    }
+
+    // 3. Buscar el Pase Digital correspondiente al token escaneado
+    const pase = await prisma.paseDigital.findUnique({
+      where: { qrSecureToken },
+      include: {
+        invitadoPrincipal: {
+          include: {
+            asistentes: {
+              where: { asiste: true } // Traer solo a los que confirmaron previamente
+            }
+          }
+        }
+      }
+    });
+
+    // 4. Validaciones de control de acceso físico
+    if (!pase || pase.invitadoPrincipal.eventId !== eventId) {
+      return NextResponse.json(
+        { valid: false, error: 'Código QR inválido o no pertenece a este evento.' },
+        { status: 404 }
+      );
+    }
+
+    if (pase.validado) {
+      return NextResponse.json({
+        valid: false,
+        error: '¡ALERTA! Este pase ya fue utilizado.',
+        fechaIngreso: pase.fechaValidacion,
+        familia: pase.invitadoPrincipal.nombreFamilia
+      }, { status: 400 });
+    }
+
+    // 5. Registrar el ingreso exitoso en la base de datos
+    const paseValidado = await prisma.paseDigital.update({
+      where: { id: pase.id },
+      data: {
+        validado: true,
+        fechaValidacion: new Date()
+      }
+    });
+
+    // 6. Responder con toda la información necesaria para la interfaz de la Planner
+    return NextResponse.json({
+      valid: true,
+      message: '¡Acceso Concedido Exitosamente!',
+      datosAcceso: {
+        familia: pase.invitadoPrincipal.nombreFamilia,
+        asistentesEsperados: pase.asistentesEsperados,
+        nombresAsistentes: pase.invitadoPrincipal.asistentes.map(a => a.nombreCompleto),
+        horaIngreso: paseValidado.fechaValidacion
+      }
+    }, { status: 200 });
+
+  } catch (error) {
+    console.error('ERROR_CHECKIN_QR_API:', error);
+    return NextResponse.json(
+      { error: 'Error interno del servidor al procesar el check-in.' },
+      { status: 500 }
+    );
+  }
+}
 </file>
 
 <file path="app/api/event/create/route.ts">
@@ -5660,6 +5382,107 @@ export async function POST(request: Request) {
 }
 </file>
 
+<file path="app/api/event/dashboard/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+export async function GET(request: Request) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const userId = auth.session.user.id;
+    
+    // Obtener el eventId de los parámetros de la URL (?eventId=xxx)
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get('eventId');
+
+    if (!eventId) {
+      return NextResponse.json({ error: 'Falta el parámetro eventId.' }, { status: 400 });
+    }
+
+// 2. Verificar que el usuario pertenece al evento
+    const membresia = await prisma.eventMember.findFirst({
+      where: { eventId, userId }
+    });
+
+    if (!membresia) {
+      return NextResponse.json({ error: 'No tienes permisos para ver este evento.' }, { status: 403 });
+    }
+
+    // 3. Consultas simultáneas en la base de datos para optimizar rendimiento
+    const [invitadosPrincipales, asistentes] = await prisma.$transaction([
+      // Conteo de grupos/invitaciones por estatus RSVP
+      prisma.invitadoPrincipal.findMany({
+        where: { eventId },
+        select: { statusRSVP: true, pasesTotales: true }
+      }),
+      // Conteo de asistentes individuales confirmados reales
+      prisma.asistente.findMany({
+        where: { invitadoPrincipal: { eventId } },
+        select: { asiste: true, menuSeleccionado: true, restricciones: true }
+      })
+    ]);
+
+    // 4. Procesar métricas de Invitaciones (Grupos)
+    let totalInvitaciones = invitadosPrincipales.length;
+    let rsvpConfirmados = 0;
+    let rsvpRechazados = 0;
+    let rsvpPendientes = 0;
+    let totalPasesAsignados = 0;
+
+    invitadosPrincipales.forEach(inv => {
+      totalPasesAsignados += inv.pasesTotales;
+      if (inv.statusRSVP === 'CONFIRMADO') rsvpConfirmados++;
+      else if (inv.statusRSVP === 'RECHAZADO') rsvpRechazados++;
+      else rsvpPendientes++;
+    });
+
+    // 5. Procesar métricas de Asistentes Individuales (Sillas Reales)
+    let totalAsistentesConfirmados = 0;
+    const menus: Record<string, number> = {};
+    const restriccionesAlimentarias: string[] = [];
+
+    asistentes.forEach(asist => {
+      if (asist.asiste) {
+        totalAsistentesConfirmados++;
+        
+        // Agrupar menús
+        const menu = asist.menuSeleccionado || 'No especificado';
+        menus[menu] = (menus[menu] || 0) + 1;
+
+        // Recolectar alergias/restricciones si existen
+        if (asist.restricciones && asist.restricciones.trim() !== '') {
+          restriccionesAlimentarias.push(asist.restricciones.trim());
+        }
+      }
+    });
+
+    // 6. Responder con el objeto estructurado para las gráficas del Front
+    return NextResponse.json({
+      resumenInvitaciones: {
+        totalInvitaciones,
+        confirmadas: rsvpConfirmados,
+        rechazadas: rsvpRechazados,
+        pendientes: rsvpPendientes
+      },
+      resumenAsistenciaReal: {
+        totalPasesAsignados,
+        sillasOcupadasReales: totalAsistentesConfirmados,
+        sillasVaciasOcupadas: totalPasesAsignados - totalAsistentesConfirmados
+      },
+      menus,
+      restriccionesAlimentarias
+    }, { status: 200 });
+
+  } catch (error) {
+    console.error('ERROR_DASHBOARD_GET_API:', error);
+    return NextResponse.json({ error: 'Error al obtener métricas del dashboard.' }, { status: 500 });
+  }
+}
+</file>
+
 <file path="app/api/event/invitados/list/route.ts">
 import { NextResponse } from 'next/server';
 import { requireVerifiedApiSession } from '@/lib/auth/session';
@@ -5717,6 +5540,149 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('ERROR_LIST_INVITADOS_API:', error);
     return NextResponse.json({ error: 'Error al obtener la lista de invitados.' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/event/invitados/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client'; // 1. Importamos los tipos de Prisma
+
+function generarCodigoAcceso(nombre: string): string {
+  const base = nombre
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+  
+  const sufijoAleatorio = Math.random().toString(36).substring(2, 6);
+  return `${base}-${sufijoAleatorio}`;
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const userId = auth.session.user.id;
+    const body = await request.json();
+    const { eventId, listaInvitados } = body;
+
+    if (!eventId || !listaInvitados || !Array.isArray(listaInvitados)) {
+      return NextResponse.json({ error: 'Formato incorrecto.' }, { status: 400 });
+    }
+
+    // 1. Obtener el evento para verificar permisos Y leer su configuración
+    const eventoConfig = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        members: { where: { userId } }
+      }
+    });
+
+    if (!eventoConfig || eventoConfig.members.length === 0) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para administrar este evento.' },
+        { status: 403 }
+      );
+    }
+
+    const permiteAcompanantes = eventoConfig.configPermiteAcompanantes;
+
+    // 2. Procesar la carga masiva adaptada a las reglas de la boda
+    // Añadimos el tipo a 'tx' para que TypeScript no se queje
+    const resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const registrosCreados = [];
+
+      for (const invitado of listaInvitados) {
+        const { nombreFamilia, pasesTotales, nombresAsistentes, telefono } = invitado;
+
+        if (!nombreFamilia) continue;
+
+        let pasesFinales = 1;
+        let listaAsistentesFinales: string[] = [];
+
+        if (permiteAcompanantes) {
+          // MODALIDAD TRADICIONAL
+          pasesFinales = parseInt(pasesTotales) || 1;
+          listaAsistentesFinales = Array.isArray(nombresAsistentes) && nombresAsistentes.length > 0
+            ? nombresAsistentes 
+            : [nombreFamilia];
+        } else {
+          // MODALIDAD INDIVIDUAL
+          pasesFinales = 1;
+          listaAsistentesFinales = [nombreFamilia]; 
+        }
+
+        const codigoAcceso = generarCodigoAcceso(nombreFamilia);
+
+        const nuevoGrupo = await tx.invitadoPrincipal.create({
+          data: {
+            // 2. Conectamos la relación de forma explícita
+            event: { connect: { id: eventId } }, 
+            nombreFamilia,
+            // 3. Proporcionamos un valor por defecto al teléfono si el Excel no lo trae
+            telefono: telefono || "", 
+            pasesTotales: pasesFinales,
+            codigoAcceso,
+            asistentes: {
+              create: listaAsistentesFinales.map((nombre: string) => ({
+                nombreCompleto: nombre,
+                asiste: false,
+              })),
+            },
+          },
+          include: {
+            asistentes: true,
+          },
+        });
+
+        registrosCreados.push(nuevoGrupo);
+      }
+
+      return registrosCreados;
+    });
+
+    return NextResponse.json({ 
+      message: `Procesados exitosamente ${resultado.length} invitados en modo ${permiteAcompanantes ? 'Familiar/Grupal' : 'Individual/Personal'}.`, 
+      invitados: resultado 
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error('ERROR_BULK_INVITADOS_CON_CONFIG_API:', error);
+    return NextResponse.json({ error: 'Error al cargar invitados.' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/guests/[id]/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> } // 1. params ahora es una promesa
+) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    // 2. Extraemos el id usando await
+    const { id } = await params;
+
+    await prisma.invitadoPrincipal.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ message: 'Grupo de invitados eliminado con éxito (Cascada activada).' });
+  } catch (error) {
+    console.error('PRISMA_DELETE_GUEST_ERROR:', error);
+    return NextResponse.json({ error: 'Error al eliminar el invitado.' }, { status: 500 });
   }
 }
 </file>
@@ -5916,6 +5882,49 @@ model PaseDigital {
   validado             Boolean           @default(false)
   fechaValidacion      DateTime?
   invitadoPrincipal    InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "invitify",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@supabase/supabase-js": "^2.106.2",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "next": "16.2.7",
+    "next-auth": "^4.24.14",
+    "pg": "^8.21.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "resend": "^6.12.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^22.19.20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "prisma": "^7.8.0",
+    "tailwindcss": "^4",
+    "typescript": "^6.0.3"
+  }
 }
 </file>
 
