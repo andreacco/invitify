@@ -15,6 +15,9 @@ export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
     ubicacionCeremonia: evento.ubicacionCeremonia || '',
     ubicacionRecepcion: evento.ubicacionRecepcion,
     configPermiteAcompanantes: evento.configPermiteAcompanantes,
+    colorPrincipal: evento.colorPrincipal || '#9333ea',
+    mapUrlCeremonia: evento.mapUrlCeremonia || '',
+    mapUrlRecepcion: evento.mapUrlRecepcion || '',
   });
 
   const handleSave = async (e: React.FormEvent) => {
@@ -65,16 +68,49 @@ export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
             />
           </div>
 
-          {evento.ubicacionCeremonia !== 'No aplica' && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Ceremonia</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Color Principal</label>
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
+                <input
+                  type="color"
+                  value={formData.colorPrincipal}
+                  onChange={(e) => setFormData({ ...formData, colorPrincipal: e.target.value })}
+                  className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
+                />
+              </div>
               <input
                 type="text"
-                value={formData.ubicacionCeremonia}
-                onChange={(e) => setFormData({ ...formData, ubicacionCeremonia: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+                value={formData.colorPrincipal}
+                onChange={(e) => setFormData({ ...formData, colorPrincipal: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none uppercase font-mono"
+                maxLength={7}
               />
             </div>
+          </div>
+
+          {evento.ubicacionCeremonia !== 'No aplica' && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Ceremonia</label>
+                <input
+                  type="text"
+                  value={formData.ubicacionCeremonia}
+                  onChange={(e) => setFormData({ ...formData, ubicacionCeremonia: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Link Google Maps Ceremonia</label>
+                <input
+                  type="text"
+                  placeholder="https://maps.app.goo.gl/..."
+                  value={formData.mapUrlCeremonia}
+                  onChange={(e) => setFormData({ ...formData, mapUrlCeremonia: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+                />
+              </div>
+            </>
           )}
 
           <div className="space-y-1.5">
@@ -83,6 +119,17 @@ export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
               type="text"
               value={formData.ubicacionRecepcion}
               onChange={(e) => setFormData({ ...formData, ubicacionRecepcion: e.target.value })}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Link Google Maps Recepción</label>
+            <input
+              type="text"
+              placeholder="https://maps.app.goo.gl/..."
+              value={formData.mapUrlRecepcion}
+              onChange={(e) => setFormData({ ...formData, mapUrlRecepcion: e.target.value })}
               className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
             />
           </div>

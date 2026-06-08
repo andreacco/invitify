@@ -67,12 +67,6 @@ export default function EventoDashboardPage() {
               <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
-            <Link
-              href={`/dashboard/eventos/${id}/invitacion`}
-              className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md shadow-purple-600/10 w-fit"
-            >
-              🎨 Diseñar invitación
-            </Link>
           </div>
           
           {/* Menú de Pestañas (Tabs Nav) */}
@@ -81,15 +75,29 @@ export default function EventoDashboardPage() {
               { id: 'resumen', label: '📊 Resumen' },
               { id: 'invitados', label: '👥 Invitados' },
               { id: 'config', label: '⚙️ Configuración' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
+              { id: 'diseno', label: '🎨 Diseñar', href: `/dashboard/eventos/${id}/invitacion` },
+            ].map((tab) => {
+              if (tab.href) {
+                return (
+                  <Link
+                    key={tab.id}
+                    href={tab.href}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200"
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
           {/* 🚪 BOTÓN DE CERRAR SESIÓN PREMIUM */}
           <button
@@ -105,7 +113,7 @@ export default function EventoDashboardPage() {
         {/* CONTENIDO DE LAS PESTAÑAS */}
         <div className="animate-in fade-in duration-200">
           {activeTab === 'resumen' && <ResumenTab evento={evento} />}
-          {activeTab === 'invitados' && <InvitadosTab eventoId={evento.id} />}
+          {activeTab === 'invitados' && <InvitadosTab evento={evento} />}
           {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
         </div>
 
