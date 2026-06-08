@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ==========================================
+   SCROLLBAR PREMIUM (Modo Oscuro)
+   ========================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b; /* Fondo sutil (zinc-900) */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* Color de la barra (zinc-700) */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9333ea; /* Acento morado de Invitify al pasar el mouse (purple-600) */
+}
+
+/* Firefox (Standard CSS) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 #18181b;
+}

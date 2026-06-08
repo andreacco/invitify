@@ -9,6 +9,43 @@ export default function InvitadosTab({ evento }: { evento: any }) {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'masiva' | 'manual'>('masiva');
+  // --- NUEVOS ESTADOS ---
+  const [isSavingManual, setIsSavingManual] = useState(false);
+ const [manualForm, setManualForm] = useState({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+ const handleGuardarManual = async () => {
+    if (!manualForm.nombreFamilia) return alert("El nombre del invitado es obligatorio.");
+    setIsSavingManual(true);
+    
+    try {
+      const res = await fetch('/api/event/invitados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: evento.id,
+          listaInvitados: [{
+            nombreFamilia: manualForm.nombreFamilia,
+            pasesTotales: evento.configPermiteAcompanantes ? manualForm.pasesTotales : 1,
+            telefono: manualForm.telefono
+          }]
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al guardar el invitado');
+      
+      // Recargar la lista de invitados
+      const resList = await fetch(`/api/event/invitados/list?eventId=${evento.id}`);
+      const data = await resList.json();
+      setInvitados(data.invitados || []);
+      
+      // Cerrar modal y limpiar
+      setIsModalOpen(false);
+      setManualForm({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsSavingManual(false);
+    }
+  };
 
   useEffect(() => {
     async function loadInvitados() {
@@ -139,26 +176,54 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                   <>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre Familia / Grupo</label>
-                      <input type="text" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Familia Pérez" />
+                      <input 
+                        type="text" 
+                        value={manualForm.nombreFamilia}
+                        onChange={(e) => setManualForm({...manualForm, nombreFamilia: e.target.value})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                        placeholder="Ej: Familia Pérez" 
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases Asignados</label>
-                      <input type="number" min="1" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: 4" />
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={manualForm.pasesTotales}
+                        onChange={(e) => setManualForm({...manualForm, pasesTotales: parseInt(e.target.value) || 1})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                      />
                     </div>
                   </>
                 ) : (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Invitado</label>
-                    <input type="text" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Juan Pérez" />
+                    <input 
+                      type="text" 
+                      value={manualForm.nombreFamilia}
+                      onChange={(e) => setManualForm({...manualForm, nombreFamilia: e.target.value})}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                      placeholder="Ej: Juan Pérez" 
+                    />
                     <p className="text-[10px] text-amber-500/80 mt-1">⚠️ Este evento no permite acompañantes (Pase único).</p>
                   </div>
                 )}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
-                  <input type="tel" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." />
+                  <input 
+                    type="tel" 
+                    value={manualForm.telefono}
+                    onChange={(e) => setManualForm({...manualForm, telefono: e.target.value})}
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                    placeholder="+52..." 
+                  />
                 </div>
-                <button className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all">
-                  Guardar Invitado
+                <button 
+                  onClick={handleGuardarManual}
+                  disabled={isSavingManual}
+                  className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                >
+                  {isSavingManual ? 'Guardando...' : 'Guardar Invitado'}
                 </button>
               </div>
             )}

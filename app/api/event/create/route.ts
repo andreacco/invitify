@@ -27,6 +27,8 @@ export async function POST(request: Request) {
       ubicacionRecepcion, 
       miRol, 
       configPermiteAcompanantes,
+      colorPrincipal,
+      coloresSecundarios,
       colaboradores 
     } = body;
 
@@ -60,6 +62,8 @@ export async function POST(request: Request) {
           ubicacionCeremonia: ubicacionCeremonia || null,
           ubicacionRecepcion,
           configPermiteAcompanantes: configPermiteAcompanantes ?? true,
+          colorPrincipal,
+          coloresSecundarios: coloresSecundarios || [],
           ownerId: userId, // ✨ El creador queda registrado nativamente como el Dueño
         },
       });

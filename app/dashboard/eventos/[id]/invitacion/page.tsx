@@ -93,8 +93,10 @@ export default function InvitacionEditorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <header className="h-16 border-b border-zinc-800 px-6 flex items-center justify-between bg-zinc-900/50 backdrop-blur-md sticky top-0 z-50">
+    // 1. CAMBIO CLAVE: Usar `h-screen` y `overflow-hidden` para bloquear el scroll del navegador
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
+      
+      <header className="h-16 border-b border-zinc-800 px-6 flex items-center justify-between bg-zinc-900/50 backdrop-blur-md shrink-0 z-50">
         <div className="flex items-center gap-4 min-w-0">
           <Link
             href={`/dashboard/eventos/${eventId}`}
@@ -131,14 +133,22 @@ export default function InvitacionEditorPage() {
         </div>
       </header>
 
-      <main className="flex-1 flex overflow-hidden min-h-0">
-        <section className="w-full md:w-[450px] border-r border-zinc-800 bg-zinc-900 overflow-y-auto flex flex-col shrink-0">
+      <main className="flex-1 flex overflow-hidden min-h-0 relative">
+        
+        {/* PANEL IZQUIERDO: Dinámico, con su propio scroll interno */}
+        <section className="w-full md:w-[450px] h-full border-r border-zinc-800 bg-zinc-900 flex flex-col shrink-0 z-20">
+          {/* El scroll lo maneja internamente PanelEdicion */}
           <PanelEdicion template={template} setTemplate={setTemplate} />
         </section>
 
-        <section className="flex-1 bg-zinc-950 flex items-center justify-center p-8 overflow-y-auto">
-          <SimuladorMovil template={template} />
+        {/* PANEL DERECHO: Fijo, centrado y sin scroll general */}
+        <section className="hidden md:flex flex-1 bg-zinc-950 items-center justify-center overflow-hidden relative z-10 p-4">
+          {/* Contenedor "scale" por si la pantalla de tu Mac es un poco baja, evita que el teléfono se corte arriba y abajo */}
+          <div className="transform scale-[0.85] lg:scale-100 origin-center transition-transform duration-300">
+            <SimuladorMovil template={template} />
+          </div>
         </section>
+
       </main>
     </div>
   );

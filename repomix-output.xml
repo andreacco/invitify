@@ -62,6 +62,8 @@ app/
         route.ts
     event/
       [id]/
+        update/
+          route.ts
         route.ts
       checkin/
         route.ts
@@ -110,6 +112,9 @@ app/
       page.tsx
     layout.tsx
     page.tsx
+  i/
+    [codigoAcceso]/
+      page.tsx
   favicon.ico
   globals.css
   layout.tsx
@@ -147,6 +152,12 @@ prisma/
       migration.sql
     20260601053558_add_event_owner_relation/
       migration.sql
+    20260608023605_add_event_colors_and_maps/
+      migration.sql
+    20260608041018_add_map_visibility_toggles/
+      migration.sql
+    20260608043459_add_color_palette/
+      migration.sql
     migration_lock.toml
   schema.prisma
 public/
@@ -161,8 +172,13 @@ src/
       DashboardGuard.tsx
     editor/
       ImageUploader.tsx
+      MapPicker.tsx
       PanelEdicion.tsx
       SimuladorMovil.tsx
+    invitation/
+      EnvelopeWrapper.tsx
+    templates/
+      PearlElegance.tsx
     Providers.tsx
   constants/
     defaultTemplate.ts
@@ -186,6 +202,834 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="app/i/[codigoAcceso]/page.tsx">
+import { notFound } from 'next/navigation';
+import { prisma } from '@/lib/db';
+import EnvelopeWrapper from '@/components/invitation/EnvelopeWrapper';
+
+export default async function InvitationPage({
+  params,
+}: {
+  params: Promise<{ codigoAcceso: string }>;
+}) {
+  const { codigoAcceso } = await params;
+
+  const invitado = await prisma.invitadoPrincipal.findUnique({
+    where: { codigoAcceso },
+    include: {
+      event: {
+        include: {
+          template: true,
+        },
+      },
+      asistentes: true,
+    },
+  });
+
+  if (!invitado || !invitado.event) {
+    return notFound();
+  }
+
+  // Serialize dates to plain objects for the client component boundary
+  const serializedInvitado = JSON.parse(JSON.stringify(invitado));
+
+  return <EnvelopeWrapper invitado={serializedInvitado} evento={serializedInvitado.event} />;
+}
+</file>
+
+<file path="prisma/migrations/20260608041018_add_map_visibility_toggles/migration.sql">
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN     "configMostrarMapaCeremonia" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "configMostrarMapaRecepcion" BOOLEAN NOT NULL DEFAULT true;
+</file>
+
+<file path="prisma/migrations/20260608043459_add_color_palette/migration.sql">
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN     "coloresSecundarios" TEXT[] DEFAULT ARRAY[]::TEXT[];
+</file>
+
+<file path="src/components/editor/MapPicker.tsx">
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+import { GoogleMap, useLoadScript, Marker, Autocomplete } from '@react-google-maps/api';
+
+// IMPORTANT: Define libraries outside the component to prevent infinite re-renders
+const libraries: ("places")[] = ["places"];
+
+const mapContainerStyle = {
+  width: '100%',
+  height: '300px',
+  borderRadius: '0.75rem',
+};
+
+const defaultCenter = {
+  lat: 10.4806,
+  lng: -66.9036, // Default: Caracas
+};
+
+const darkMapStyle = [
+  { elementType: 'geometry', stylers: [{ color: '#18181b' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#a1a1aa' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#18181b' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#3f3f46' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#27272a' }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#3f3f46' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#09090b' }] },
+];
+
+interface MapPickerProps {
+  label: string;
+  value: string;
+  onChange: (url: string) => void;
+}
+
+export default function MapPicker({ label, value, onChange }: MapPickerProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [marker, setMarker] = useState<google.maps.LatLngLiteral | null>(null);
+  const [mapCenter, setMapCenter] = useState<google.maps.LatLngLiteral>(defaultCenter);
+  
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
+    libraries,
+  });
+
+  // Handle place selection from the search bar
+  const onPlaceChanged = () => {
+    if (autocompleteRef.current !== null) {
+      const place = autocompleteRef.current.getPlace();
+      if (place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        setMarker({ lat, lng });
+        setMapCenter({ lat, lng }); // Move map to the searched location
+      }
+    }
+  };
+
+  // Handle manual clicks on the map
+  const handleMapClick = useCallback((e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      setMarker({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    }
+  }, []);
+
+  // Save the marker as a standard Google Maps URL
+  const handleConfirmLocation = () => {
+    if (marker) {
+      onChange(`https://www.google.com/maps/search/?api=1&query=${marker.lat},${marker.lng}`);
+    }
+    setIsModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+        {label}
+      </label>
+
+      {/* Primary Input with Map Button */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Pega el link aquí o busca en el mapa..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none transition-colors"
+        />
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="shrink-0 px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-purple-500 text-zinc-300 hover:text-purple-400 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
+        >
+          <span>📍</span> Mapa
+        </button>
+      </div>
+
+      {/* Map Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm" 
+            onClick={() => setIsModalOpen(false)} 
+          />
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-5 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4">
+            
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-100">Buscar Ubicación</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadError && <div className="text-rose-400 text-xs">Error al cargar Google Maps.</div>}
+            
+            {!isLoaded ? (
+              <div className="h-[300px] bg-zinc-950 rounded-xl animate-pulse flex items-center justify-center text-zinc-500 text-xs">
+                Cargando cartografía...
+              </div>
+            ) : (
+              <>
+                {/* Search Bar (Google Places Autocomplete) */}
+                <div className="relative z-10">
+                  <Autocomplete
+                    onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                    onPlaceChanged={onPlaceChanged}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Ej: Hacienda La Vega, Iglesia San José..."
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none shadow-lg"
+                    />
+                  </Autocomplete>
+                </div>
+
+                {/* Google Map */}
+                <div className="border border-zinc-800 rounded-xl overflow-hidden shadow-inner">
+                  <GoogleMap
+                    mapContainerStyle={mapContainerStyle}
+                    zoom={14}
+                    center={mapCenter}
+                    onClick={handleMapClick}
+                    options={{
+                      disableDefaultUI: true,
+                      zoomControl: true,
+                      styles: darkMapStyle,
+                    }}
+                  >
+                    {marker && <Marker position={marker} />}
+                  </GoogleMap>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex justify-between items-center pt-2 border-t border-zinc-800/60">
+                  <p className="text-[10px] text-zinc-500">
+                    {marker ? '📍 Ubicación seleccionada' : 'Haz clic en el mapa o busca un lugar'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConfirmLocation}
+                    disabled={!marker}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all disabled:opacity-50"
+                  >
+                    Confirmar Ubicación
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/invitation/EnvelopeWrapper.tsx">
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import PearlElegance from '@/components/templates/PearlElegance';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface Asistente {
+  id: string;
+  nombreCompleto: string;
+  asiste: boolean;
+}
+
+interface TemplateEstilos {
+  theme: string;
+  typography: string;
+  musicUrl: string;
+  envelope: {
+    color: string;
+    waxSeal: string;
+  };
+}
+
+interface TemplateBloques {
+  header: {
+    coupleNames: string;
+    welcomeText: string;
+    coverPhoto: string;
+  };
+  dressCode: {
+    style: string;
+    description: string;
+  };
+  itinerary: Array<{ hora: string; actividad: string }>;
+  countdown: {
+    enabled: boolean;
+    message: string;
+  };
+}
+
+interface Template {
+  estilos: TemplateEstilos;
+  bloques: TemplateBloques;
+}
+
+interface Evento {
+  id: string;
+  titulo: string;
+  fecha: string;
+  colorPrincipal: string | null;
+  coloresSecundarios: string[];
+  ubicacionCeremonia: string | null;
+  ubicacionRecepcion: string;
+  mapUrlCeremonia: string | null;
+  mapUrlRecepcion: string | null;
+  configMostrarMapaCeremonia: boolean;
+  configMostrarMapaRecepcion: boolean;
+  template: Template | null;
+}
+
+interface Invitado {
+  id: string;
+  nombreFamilia: string;
+  pasesTotales: number;
+  statusRSVP: string;
+  asistentes: Asistente[];
+  event: Evento;
+}
+
+interface EnvelopeWrapperProps {
+  invitado: Invitado;
+  evento: Evento;
+}
+
+// ============================================
+// ENVELOPE COLOR MAP
+// ============================================
+
+const envelopeColorMap: Record<string, { bg: string; text: string; border: string }> = {
+  Onyx:      { bg: 'bg-zinc-900',        text: 'text-zinc-400', border: 'border-zinc-700/30' },
+  Petroleum: { bg: 'bg-slate-800',        text: 'text-slate-300', border: 'border-slate-600/30' },
+  Lavender:  { bg: 'bg-purple-950/90',    text: 'text-purple-200', border: 'border-purple-700/30' },
+  Burgundy:  { bg: 'bg-rose-950',         text: 'text-rose-200', border: 'border-rose-700/30' },
+  Pearl:     { bg: 'bg-[#fdfdfc]',        text: 'text-zinc-800', border: 'border-zinc-200/80' }, // <-- ESTE ES EL NUEVO
+};
+
+// ============================================
+// WAX SEAL CONTENT
+// ============================================
+
+function WaxSealContent({ sealType, coupleNames }: { sealType: string; coupleNames?: string }) {
+  if (sealType === 'Lotus')      return <span className="text-2xl">🪷</span>;
+  if (sealType === 'Eucalyptus') return <span className="text-2xl">🌿</span>;
+  
+  // Monogram: extract initials from couple names
+  if (sealType === 'Monogram' && coupleNames) {
+    const parts = coupleNames.split(/\s*[&y]\s*/i);
+    const initials = parts.map(p => p.trim().charAt(0).toUpperCase()).join(' & ');
+    return <span className="text-xs font-serif font-bold">{initials}</span>;
+  }
+
+  return <span className="text-2xl">💌</span>;
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
+export default function EnvelopeWrapper({ invitado, evento }: EnvelopeWrapperProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false); // <-- NUEVO ESTADO
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  const accentColor = evento.colorPrincipal || '#9333ea';
+  const template = evento.template;
+  const estilos = template?.estilos;
+  const bloques = template?.bloques;
+
+  // Envelope styling
+  const envelopeStyle = estilos?.envelope?.color
+    ? envelopeColorMap[estilos.envelope.color] || envelopeColorMap['Onyx']
+    : envelopeColorMap['Onyx'];
+
+  // ============================================
+  // LIVE COUNTDOWN
+  // ============================================
+  useEffect(() => {
+    const eventDate = new Date(evento.fecha);
+
+    function calculateCountdown() {
+      const now = new Date();
+      const diff = eventDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      setCountdown({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / (1000 * 60)) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      });
+    }
+
+    calculateCountdown();
+    const interval = setInterval(calculateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [evento.fecha]);
+
+  // ============================================
+  // CLOSED STATE — THE ENVELOPE
+  // ============================================
+  if (!isOpen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
+        <div
+          onClick={() => setIsOpen(true)}
+          className={`
+            relative max-w-md w-full aspect-[3/4] rounded-3xl cursor-pointer
+            ${envelopeStyle.bg} ${envelopeStyle.text}
+            flex flex-col items-center justify-center p-8
+            shadow-2xl shadow-black/50
+            transition-all duration-700 ease-in-out
+            hover:scale-[1.02] active:scale-[0.98]
+            overflow-hidden select-none
+          `}
+        >
+          {/* Paper texture border */}
+          <div className={`absolute inset-0 border-[14px] border-black/10 rounded-3xl pointer-events-none`} />
+          
+          {/* Subtle radial glow */}
+          <div className="absolute inset-0 bg-gradient-radial from-white/[0.03] to-transparent pointer-events-none" />
+
+          <div className="text-center space-y-8 z-10">
+            {/* Prompt text */}
+            <span className="text-[10px] tracking-[0.25em] uppercase opacity-50 block animate-pulse">
+              Toque para abrir
+            </span>
+
+            {/* Wax Seal */}
+            <div className="w-24 h-24 rounded-full bg-amber-700/90 border-2 border-amber-600/60 shadow-[0_6px_20px_rgba(0,0,0,0.5),inset_0_2px_6px_rgba(255,255,255,0.15)] mx-auto flex items-center justify-center transition-transform duration-300 hover:scale-110 active:scale-95">
+              <div className="w-[4.5rem] h-[4.5rem] rounded-full border border-dashed border-amber-500/40 flex items-center justify-center text-amber-100">
+                <WaxSealContent
+                  sealType={estilos?.envelope?.waxSeal || 'Lotus'}
+                  coupleNames={bloques?.header?.coupleNames}
+                />
+              </div>
+            </div>
+
+            {/* Guest Family Name */}
+            <div className="space-y-2">
+              <div className="font-serif italic text-xl text-amber-100/90 leading-tight">
+                {invitado.nombreFamilia}
+              </div>
+              <div className="w-16 h-px bg-amber-100/20 mx-auto" />
+            </div>
+          </div>
+
+          {/* Decorative bottom */}
+          <div className="absolute bottom-6 left-0 right-0 flex justify-center opacity-30">
+            <span className="text-[9px] tracking-[0.3em] uppercase">Invitación Exclusiva</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+// ============================================
+  // OPEN STATE — THE INVITATION
+  // ============================================
+  return (
+    <div className="relative">
+      {/* Botón flotante para cerrar el sobre */}
+      <button
+        onClick={() => setIsOpen(false)}
+        className="fixed top-4 right-4 z-50 bg-black/40 backdrop-blur-md text-white hover:bg-black/60 text-[10px] uppercase tracking-widest py-2 px-4 rounded-full font-medium transition-all duration-300 shadow-lg"
+      >
+        ↩ Cerrar
+      </button>
+
+      {/* Aquí es donde la magia ocurre: Inyectamos la plantilla web responsiva */}
+      <PearlElegance 
+        evento={evento} 
+        invitado={invitado} 
+        onOpenRsvp={() => setIsRsvpModalOpen(true)} 
+      />
+
+      {/* ========================================
+          SECTION 1: COVER / HEADER
+          ======================================== */}
+      <div
+        className="relative min-h-[500px] bg-zinc-800 flex flex-col justify-end p-8 text-center bg-cover bg-center transition-all duration-500"
+        style={{
+          backgroundImage:
+            bloques?.header?.coverPhoto && bloques.header.coverPhoto !== '/vercel.svg'
+              ? `url(${bloques.header.coverPhoto})`
+              : 'none',
+        }}
+      >
+        {/* Fallback pattern */}
+        {(!bloques?.header?.coverPhoto || bloques.header.coverPhoto === '/vercel.svg') && (
+          <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 flex items-center justify-center">
+            <div className="w-32 h-32 rounded-full border border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 text-xs">
+              Sin portada
+            </div>
+          </div>
+        )}
+
+        {/* Dark gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-black/50 to-transparent z-10" />
+
+        {/* Content */}
+        <div className="relative z-20 text-white flex flex-col gap-3 mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <h1
+            className="text-5xl font-serif tracking-wide leading-tight"
+            style={{ color: accentColor }}
+          >
+            {bloques?.header?.coupleNames || evento.titulo}
+          </h1>
+          <div className="w-20 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+          <p className="text-sm opacity-80 italic max-w-[300px] mx-auto font-light text-zinc-200">
+            {bloques?.header?.welcomeText || ''}
+          </p>
+        </div>
+      </div>
+
+      {/* ========================================
+          SECTION 2: DRESS CODE
+          ======================================== */}
+      {bloques?.dressCode && (
+        <div className="p-8 bg-zinc-50 border-b border-zinc-100 text-center flex flex-col gap-3 animate-in fade-in duration-500">
+          <span
+            className="text-xs font-bold uppercase tracking-[0.2em]"
+            style={{ color: accentColor }}
+          >
+            Código de Vestimenta
+          </span>
+          <h3 className="text-xl font-semibold text-zinc-800">
+            {bloques.dressCode.style}
+          </h3>
+          <p className="text-sm text-zinc-500 leading-relaxed font-light max-w-xs mx-auto">
+            {bloques.dressCode.description}
+          </p>
+        </div>
+      )}
+
+      {/* ========================================
+          SECTION 3: COUNTDOWN
+          ======================================== */}
+      {bloques?.countdown?.enabled && (
+        <div className="p-8 bg-zinc-900 text-white text-center flex flex-col gap-4">
+          <p className="text-[10px] tracking-[0.3em] uppercase opacity-50">
+            {bloques.countdown.message || 'Faltan'}
+          </p>
+          <div className="flex justify-center gap-3">
+            {[
+              { value: countdown.days, label: 'Días' },
+              { value: countdown.hours, label: 'Horas' },
+              { value: countdown.minutes, label: 'Min' },
+              { value: countdown.seconds, label: 'Seg' },
+            ].map((unit) => (
+              <div
+                key={unit.label}
+                className="bg-zinc-800 rounded-xl p-3 min-w-[60px] shadow-inner"
+              >
+                <span className="text-2xl font-bold block tabular-nums" style={{ color: accentColor }}>
+                  {String(unit.value).padStart(2, '0')}
+                </span>
+                <span className="text-[9px] uppercase tracking-wider opacity-40 mt-1 block">
+                  {unit.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================
+          SECTION 4: ITINERARY
+          ======================================== */}
+      {bloques?.itinerary && bloques.itinerary.length > 0 && (
+        <div className="p-8 flex flex-col gap-6">
+          <h4
+            className="text-center text-sm font-bold uppercase tracking-[0.2em]"
+            style={{ color: accentColor }}
+          >
+            Itinerario del Evento
+          </h4>
+          <div
+            className="flex flex-col gap-5 border-l-2 pl-5 ml-3"
+            style={{ borderColor: `${accentColor}30` }}
+          >
+            {bloques.itinerary.map((item, i) => (
+              <div key={i} className="relative flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-500" style={{ animationDelay: `${i * 100}ms` }}>
+                {/* Timeline dot */}
+                <div
+                  className="absolute -left-[27px] top-1.5 w-3 h-3 rounded-full ring-4 ring-white"
+                  style={{ backgroundColor: accentColor }}
+                />
+                <span className="text-xs font-bold" style={{ color: accentColor }}>
+                  {item.hora}
+                </span>
+                <span className="text-sm font-medium text-zinc-700">
+                  {item.actividad}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================
+          SECTION 5: MAPS (if configured)
+          ======================================== */}
+      {(evento.configMostrarMapaCeremonia && evento.mapUrlCeremonia) || (evento.configMostrarMapaRecepcion && evento.mapUrlRecepcion) ? (
+        <div className="p-8 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-4">
+          <h4
+            className="text-center text-sm font-bold uppercase tracking-[0.2em]"
+            style={{ color: accentColor }}
+          >
+            Ubicación
+          </h4>
+          <div className="flex flex-col gap-3">
+            {evento.configMostrarMapaCeremonia && evento.mapUrlCeremonia && (
+              <a
+                href={evento.mapUrlCeremonia}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-4 bg-white rounded-xl border border-zinc-200 hover:border-zinc-300 transition-all shadow-sm hover:shadow-md"
+              >
+                <span className="text-xl">⛪</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-zinc-700">Ceremonia</span>
+                  <span className="text-[10px] text-zinc-400">{evento.ubicacionCeremonia || 'Ver en Google Maps'}</span>
+                </div>
+                <span className="ml-auto text-zinc-300">→</span>
+              </a>
+            )}
+            {evento.configMostrarMapaRecepcion && evento.mapUrlRecepcion && (
+              <a
+                href={evento.mapUrlRecepcion}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-4 bg-white rounded-xl border border-zinc-200 hover:border-zinc-300 transition-all shadow-sm hover:shadow-md"
+              >
+                <span className="text-xl">🎉</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-zinc-700">Recepción</span>
+                  <span className="text-[10px] text-zinc-400">{evento.ubicacionRecepcion || 'Ver en Google Maps'}</span>
+                </div>
+                <span className="ml-auto text-zinc-300">→</span>
+              </a>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ========================================
+          SECTION 6: FOOTER & RSVP
+          ======================================== */}
+      <div className="p-8 bg-zinc-900 text-center flex flex-col gap-8">
+        
+        {/* Botón Principal RSVP */}
+        <button
+          onClick={() => setIsRsvpModalOpen(true)}
+          className="w-full py-4 rounded-2xl text-sm font-bold text-white shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+          style={{ backgroundColor: accentColor, boxShadow: `0 10px 25px -5px ${accentColor}60` }}
+        >
+          Confirmar Asistencia
+        </button>
+
+        <div className="flex flex-col gap-3">
+          <div className="w-12 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+          <p className="text-xs text-zinc-500 italic">
+            Nos llena de alegría contar con tu presencia.
+          </p>
+          <p className="text-[10px] text-zinc-600 tracking-wider uppercase">
+            Invitación creada con Invitify
+          </p>
+        </div>
+      </div>
+      {/* ========================================
+          MODAL DE CONFIRMACIÓN (RSVP)
+          ======================================== */}
+      {isRsvpModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 relative overflow-y-auto max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-300 border border-zinc-100">
+            <button 
+              onClick={() => setIsRsvpModalOpen(false)} 
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 transition-colors"
+            >
+              ✕
+            </button>
+            
+            <div className="text-center mb-6 mt-2">
+              <h2 className="text-2xl font-serif" style={{ color: accentColor }}>Confirmar Asistencia</h2>
+              <p className="text-xs text-zinc-500 mt-1">Por favor, indícanos quiénes asistirán.</p>
+            </div>
+
+            <div className="space-y-4 text-sm text-zinc-500 text-center py-12 border-2 border-dashed border-zinc-200 rounded-2xl bg-zinc-50">
+              <span className="text-3xl block mb-2">💌</span>
+              [El Formulario de RSVP irá aquí]
+              <br />
+              <span className="text-xs font-semibold text-zinc-700 mt-2 block">
+                Familia: {invitado.nombreFamilia}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/templates/PearlElegance.tsx">
+'use client';
+
+import { InvitationTemplateState } from '@/types/invitation';
+
+interface PearlEleganceProps {
+  evento: any;
+  invitado: any;
+  onOpenRsvp: () => void;
+}
+
+export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEleganceProps) {
+  const template: InvitationTemplateState = evento.template;
+  const { bloques } = template;
+  const accentColor = evento.colorPrincipal || '#d4af37'; // Dorado por defecto
+
+  return (
+    <div className="min-h-screen bg-[#f4f4f2] text-zinc-800 font-sans selection:bg-amber-200">
+      {/* Contenedor Responsivo: Full en móvil, centrado como carta en PC */}
+      <div className="max-w-md md:max-w-2xl lg:max-w-3xl mx-auto bg-[#fdfdfc] min-h-screen shadow-2xl relative overflow-hidden">
+        
+        {/* Textura sutil de papel de acuarela (ruido visual) */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
+
+        {/* 1. SECCIÓN: PORTADA Y NOMBRES */}
+        <section className="relative min-h-[70vh] flex flex-col items-center justify-center p-10 text-center border-b border-zinc-200/60">
+          <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 flex flex-col items-center gap-6">
+            <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-400">Nuestra Boda</span>
+            
+            {/* Iniciales estilo Sello */}
+            <div className="w-16 h-16 rounded-full border border-zinc-300 flex items-center justify-center mb-4">
+              <span className="font-serif text-xl" style={{ color: accentColor }}>
+                {bloques.header.coupleNames.split(' ').map(n => n[0]).join('')}
+              </span>
+            </div>
+
+            <h1 className="text-4xl md:text-6xl font-serif text-zinc-800 leading-tight">
+              {bloques.header.coupleNames}
+            </h1>
+            
+            <p className="text-sm text-zinc-500 italic max-w-sm leading-relaxed mt-4">
+              {bloques.header.welcomeText || "Queremos que seas parte de uno de los días más felices de nuestras vidas."}
+            </p>
+          </div>
+        </section>
+
+        {/* 2. SECCIÓN: FECHA Y LUGAR (CEREMONIA) */}
+        <section className="py-20 px-10 text-center flex flex-col items-center gap-8 border-b border-zinc-200/60">
+          <div className="space-y-4 animate-in fade-in duration-1000 delay-300">
+            <h2 className="text-2xl font-serif text-zinc-800">Ceremonia</h2>
+            <div className="w-10 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            
+            <div className="text-sm text-zinc-600 space-y-2 uppercase tracking-widest mt-6">
+              <p className="font-bold text-zinc-800">{new Date(evento.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+              <p>2:30 PM</p>
+            </div>
+            
+            <div className="mt-6">
+              <p className="font-serif text-lg text-zinc-800">{evento.ubicacionCeremonia || 'Iglesia Principal'}</p>
+              {evento.configMostrarMapaCeremonia && evento.mapUrlCeremonia && (
+                <a href={evento.mapUrlCeremonia} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] uppercase tracking-widest font-bold border-b border-zinc-300 pb-1 hover:text-zinc-500 transition-colors" style={{ color: accentColor }}>
+                  Ver mapa
+                </a>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* 3. SECCIÓN: RECEPCIÓN Y DRESS CODE */}
+        <section className="py-20 px-10 text-center flex flex-col items-center gap-12 border-b border-zinc-200/60 bg-zinc-50/50">
+          
+          <div className="space-y-4">
+            <h2 className="text-2xl font-serif text-zinc-800">Recepción</h2>
+            <div className="w-10 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            
+            <div className="text-sm text-zinc-600 space-y-2 uppercase tracking-widest mt-6">
+              <p>5:00 PM</p>
+            </div>
+            
+            <div className="mt-6">
+              <p className="font-serif text-lg text-zinc-800">{evento.ubicacionRecepcion}</p>
+              {evento.configMostrarMapaRecepcion && evento.mapUrlRecepcion && (
+                <a href={evento.mapUrlRecepcion} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] uppercase tracking-widest font-bold border-b border-zinc-300 pb-1 hover:text-zinc-500 transition-colors" style={{ color: accentColor }}>
+                  Ver mapa
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full max-w-xs p-6 border border-zinc-200 bg-white">
+            <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Código de Vestimenta</p>
+            <p className="font-serif text-lg text-zinc-800">{bloques.dressCode.style}</p>
+            <p className="text-xs text-zinc-500 mt-2">{bloques.dressCode.description}</p>
+          </div>
+          
+        </section>
+
+        {/* 4. SECCIÓN: ITINERARIO */}
+        {bloques.itinerary && bloques.itinerary.length > 0 && (
+          <section className="py-20 px-10 text-center flex flex-col items-center gap-8 border-b border-zinc-200/60">
+            <h2 className="text-2xl font-serif text-zinc-800">Itinerario</h2>
+            <div className="w-10 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            
+            <div className="w-full max-w-sm mt-6 space-y-8">
+              {bloques.itinerary.map((item, i) => (
+                <div key={i} className="flex justify-between items-end border-b border-zinc-200/50 pb-2">
+                  <span className="text-sm font-serif text-zinc-800">{item.actividad}</span>
+                  <span className="text-xs font-bold tracking-widest" style={{ color: accentColor }}>{item.hora}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 5. SECCIÓN: CIERRE Y RSVP */}
+        <section className="py-24 px-10 text-center flex flex-col items-center gap-8">
+          <p className="font-serif text-2xl text-zinc-800 italic">
+            "Te esperamos para celebrar nuestro amor"
+          </p>
+          
+          <button
+            onClick={onOpenRsvp}
+            className="mt-8 px-8 py-4 bg-zinc-900 text-white text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-colors duration-300 shadow-xl"
+          >
+            Confirmar Asistencia
+          </button>
+          
+          <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-12">
+            Invitación exclusiva para: <br/>
+            <span className="font-bold text-zinc-600 text-xs mt-1 block">{invitado.nombreFamilia}</span>
+          </p>
+        </section>
+
+      </div>
+    </div>
+  );
+}
+</file>
 
 <file path="app/api/auth/forgot-password/route.ts">
 import { prisma } from '@/lib/db';
@@ -298,6 +1142,62 @@ export async function GET() {
       { error: 'No se pudo obtener el estado de la sesión.' },
       { status: 500 }
     );
+  }
+}
+</file>
+
+<file path="app/api/event/[id]/update/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+export async function PUT(
+  request: Request, 
+  { params }: { params: Promise<{ id: string }> } 
+) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const { 
+      titulo, 
+      ubicacionCeremonia, 
+      ubicacionRecepcion, 
+      configPermiteAcompanantes,
+      configMostrarMapaCeremonia,
+      configMostrarMapaRecepcion,
+      colorPrincipal,
+      coloresSecundarios,
+      mapUrlCeremonia,
+      mapUrlRecepcion
+    } = body;
+
+    const eventoUpdate = await prisma.event.update({
+      where: { id },
+      data: {
+        titulo,
+        ubicacionCeremonia,
+        ubicacionRecepcion,
+        configPermiteAcompanantes,
+        configMostrarMapaCeremonia,
+        configMostrarMapaRecepcion,
+        colorPrincipal,
+        coloresSecundarios,
+        mapUrlCeremonia,
+        mapUrlRecepcion
+      }
+    });
+
+    return NextResponse.json({
+      evento: eventoUpdate
+    });
+
+  } catch (error) {
+    console.error('❌ PUT_EVENT_UPDATE_ERROR:', error);
+    return NextResponse.json({ error: 'Error interno del servidor.' }, { status: 500 });
   }
 }
 </file>
@@ -609,326 +1509,6 @@ export default function InvitacionEditorPage() {
           <SimuladorMovil template={template} />
         </section>
       </main>
-    </div>
-  );
-}
-</file>
-
-<file path="app/dashboard/eventos/[id]/ConfigTab.tsx">
-'use client';
-
-import { useState } from 'react';
-
-interface ConfigTabProps {
-  evento: any;
-  setEvento: (evt: any) => void;
-}
-
-export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({
-    titulo: evento.titulo,
-    ubicacionCeremonia: evento.ubicacionCeremonia || '',
-    ubicacionRecepcion: evento.ubicacionRecepcion,
-    configPermiteAcompanantes: evento.configPermiteAcompanantes,
-  });
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setSuccess(false);
-
-    try {
-      const res = await fetch(`/api/event/${evento.id}/update`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (!res.ok) throw new Error('Error al actualizar.');
-      
-      const data = await res.json();
-      setEvento(data.evento); // Sincroniza el estado global del componente padre
-      setSuccess(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      
-      {/* Configuración Básica */}
-      <div className="md:col-span-2 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 space-y-6">
-        <h3 className="text-sm font-bold tracking-wider uppercase text-purple-400">Parámetros Generales</h3>
-        
-        {success && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xs text-center font-medium">
-            ✨ Configuración guardada correctamente.
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Evento</label>
-            <input
-              type="text"
-              value={formData.titulo}
-              onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
-            />
-          </div>
-
-          {evento.ubicacionCeremonia !== 'No aplica' && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Ceremonia</label>
-              <input
-                type="text"
-                value={formData.ubicacionCeremonia}
-                onChange={(e) => setFormData({ ...formData, ubicacionCeremonia: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
-              />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Recepción</label>
-            <input
-              type="text"
-              value={formData.ubicacionRecepcion}
-              onChange={(e) => setFormData({ ...formData, ubicacionRecepcion: e.target.value })}
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-zinc-800/60 flex justify-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-5 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all disabled:opacity-50"
-          >
-            {loading ? 'Guardando...' : 'Guardar Cambios'}
-          </button>
-        </div>
-      </div>
-
-      {/* Reglas de Negocio / Toggles Especiales */}
-      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 space-y-4">
-        <h3 className="text-sm font-bold tracking-wider uppercase text-purple-400">Reglas de Control</h3>
-        <p className="text-xs text-zinc-400 leading-relaxed">Configura los límites que afectarán directamente la tarjeta de invitación digital de tus invitados.</p>
-        
-        <div className="flex items-center justify-between p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
-          <div className="space-y-0.5 pr-2">
-            <h4 className="text-xs font-semibold text-zinc-200">Acompañantes Extra</h4>
-            <p className="text-[10px] text-zinc-500">Permitir más pases asignados.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setFormData({ ...formData, configPermiteAcompanantes: !formData.configPermiteAcompanantes })}
-            className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ${formData.configPermiteAcompanantes ? 'bg-purple-600' : 'bg-zinc-700'}`}
-          >
-            <div className={`bg-zinc-100 w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${formData.configPermiteAcompanantes ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-        </div>
-      </div>
-
-    </form>
-  );
-}
-</file>
-
-<file path="app/dashboard/eventos/[id]/InvitadosTab.tsx">
-'use client';
-
-import { useState, useEffect } from 'react';
-
-export default function InvitadosTab({ eventoId }: { eventoId: string }) {
-  const [invitados, setInvitados] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
-
-  useEffect(() => {
-    async function loadInvitados() {
-      try {
-        const res = await fetch(`/api/event/${eventoId}/invitados`);
-        const data = await res.json();
-        if (res.ok) setInvitados(data.invitados || []);
-      } catch (err) {
-        console.error('Error cargando invitados:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadInvitados();
-  }, [eventoId]);
-
-  // Filtrar invitados por nombre de familia o teléfono en tiempo real
-  const invitadosFiltrados = invitados.filter(inv =>
-    inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) ||
-    inv.telefono.includes(busqueda)
-  );
-
-  return (
-    <div className="space-y-4">
-      
-      {/* ACCIONES SUPERIORES */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/20 p-4 border border-zinc-800/60 rounded-2xl">
-        <input
-          type="text"
-          placeholder="🔍 Buscar familia o teléfono..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none"
-        />
-        <button 
-          className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md"
-          onClick={() => alert('¡Próximo paso: Modal para agregar invitado!')}
-        >
-          ➕ Agregar Familia / Grupo
-        </button>
-      </div>
-
-      {/* TABLA DE INVITADOS */}
-      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-10 text-center text-xs text-zinc-500 animate-pulse">Cargando base de datos de pases...</div>
-        ) : invitadosFiltrados.length === 0 ? (
-          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados registrados para este evento.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-800/80 bg-zinc-950/40 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="p-4">Familia / Grupo</th>
-                  <th className="p-4">Código Acceso</th>
-                  <th className="p-4 text-center">Pases Asignados</th>
-                  <th className="p-4 text-center">Estado RSVP</th>
-                  <th className="p-4">Teléfono</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50 text-xs">
-                {invitadosFiltrados.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-zinc-900/20 transition-colors">
-                    <td className="p-4 font-bold text-zinc-200">{inv.nombreFamilia}</td>
-                    <td className="p-4 font-mono text-[11px] text-purple-400 font-semibold">{inv.codigoAcceso}</td>
-                    <td className="p-4 text-center font-semibold text-zinc-300">{inv.pasesTotales}</td>
-                    <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        inv.statusRSVP === 'CONFIRMADO' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-                        inv.statusRSVP === 'RECHAZADO' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-                        'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                      }`}>
-                        {inv.statusRSVP}
-                      </span>
-                    </td>
-                    <td className="p-4 text-zinc-400 font-mono">{inv.telefono}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-}
-</file>
-
-<file path="app/dashboard/eventos/[id]/ResumenTab.tsx">
-'use client';
-
-import { useState, useEffect } from 'react';
-
-export default function ResumenTab({ evento }: { evento: any }) {
-  const { metricas, fecha, miembros } = evento;
-  const [tiempoRestante, setTiempoRestante] = useState('');
-
-  // Cuenta regresiva matemática para el evento
-  useEffect(() => {
-    const target = new Date(fecha).getTime();
-
-    const interval = setInterval(() => {
-      const ahora = new Date().getTime();
-      const diferencia = target - ahora;
-
-      if (diferencia <= 0) {
-        setTiempoRestante('¡Llegó el gran día! 🎉');
-        clearInterval(interval);
-        return;
-      }
-
-      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
-      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-
-      setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [fecha]);
-
-  return (
-    <div className="space-y-6">
-      
-      {/* CARD DE CUENTA REGRESIVA */}
-      <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
-          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha).toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
-        </div>
-        <div className="text-2xl font-black bg-purple-500/10 text-purple-300 border border-purple-500/30 px-6 py-2.5 rounded-xl tracking-wider font-mono">
-          {tiempoRestante || 'Calculando...'}
-        </div>
-      </div>
-
-      {/* REJILLA DE MÉTRICAS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400' },
-          { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400' },
-          { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400' },
-          { title: 'Pases Totales Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400' },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2">
-            <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-[11px] font-bold uppercase tracking-wider">{item.title}</span>
-              <span className="text-sm">{item.icon}</span>
-            </div>
-            <p className={`text-2xl font-extrabold ${item.color}`}>{item.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* COLABORADORES ACTIVOS EN ESTE DASHBOARD */}
-      <div className="bg-zinc-900/20 border border-zinc-800/60 rounded-2xl p-6 space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Equipo de Organización</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {evento.members?.map((member: any) => (
-            <div key={member.id} className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-600/10 border border-purple-500/20 flex items-center justify-center font-bold text-purple-400 text-xs uppercase">
-                  {member.user?.nombre?.[0] || member.correoInvitado[0]}
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-zinc-200">
-                    {member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}
-                  </h4>
-                  <p className="text-[10px] text-zinc-500">{member.correoInvitado}</p>
-                </div>
-              </div>
-              <span className="text-[9px] font-bold bg-zinc-900 px-2 py-1 rounded-md text-zinc-400 border border-zinc-800 uppercase">
-                {member.role === 'PERSONALIZADO' ? member.rolPersonalizado : member.role}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
     </div>
   );
 }
@@ -2224,6 +2804,13 @@ ALTER TABLE "Event" ADD COLUMN     "ownerId" TEXT NOT NULL;
 ALTER TABLE "Event" ADD CONSTRAINT "Event_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 </file>
 
+<file path="prisma/migrations/20260608023605_add_event_colors_and_maps/migration.sql">
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN     "colorPrincipal" TEXT DEFAULT '#9333ea',
+ADD COLUMN     "mapUrlCeremonia" TEXT,
+ADD COLUMN     "mapUrlRecepcion" TEXT;
+</file>
+
 <file path="prisma/migrations/migration_lock.toml">
 # Please do not edit this file manually
 # It should be added in your version-control system (e.g., Git)
@@ -2426,7 +3013,7 @@ interface PanelEdicionProps {
 
 export default function PanelEdicion({ template, setTemplate }: PanelEdicionProps) {
   // Estado para controlar qué pestaña está activa en el panel lateral
-  const [activeTab, setActiveTab] = useState<'bloques' | 'sobres'>('bloques');
+  const [activeTab, setActiveTab] = useState<'bloques' | 'sobres' | 'plantillas'>('bloques'); // <-- ACTUALIZA ESTA LÍNEA
 
   // Funciones utilitarias para actualizar sub-estados de forma limpia
   const updateHeader = (fields: Partial<HeaderBlock>) => {
@@ -2495,21 +3082,23 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
 
   return (
     <div className="flex flex-col h-full">
-      {/* Selector de Pestañas al estilo de Screen Recording 2026-05-30 at 2.44.14 AM.mov */}
+      {/* Selector de Pestañas con 3 opciones */}
       <div className="flex border-b border-zinc-800 bg-zinc-900/80 sticky top-0 z-10">
         <button
+          type="button"
           onClick={() => setActiveTab('bloques')}
-          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${
+          className={`flex-1 py-3 text-xs font-semibold border-b-2 transition-all ${
             activeTab === 'bloques'
               ? 'border-purple-500 text-purple-400 bg-purple-500/5'
               : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
           }`}
         >
-          Contenido (Bloques)
+          Bloques
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('sobres')}
-          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${
+          className={`flex-1 py-3 text-xs font-semibold border-b-2 transition-all ${
             activeTab === 'sobres'
               ? 'border-purple-500 text-purple-400 bg-purple-500/5'
               : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
@@ -2517,6 +3106,73 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
         >
           Sobre y Sellos
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('plantillas')}
+          className={`flex-1 py-3 text-xs font-semibold border-b-2 transition-all ${
+            activeTab === 'plantillas'
+              ? 'border-purple-500 text-purple-400 bg-purple-500/5'
+              : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+          }`}
+        >
+          Plantillas
+        </button>
+      </div>
+
+      {/* Contenido de las Pestañas */}
+      <div className="p-6 flex-1 overflow-y-auto space-y-8 select-none">
+        {activeTab === 'bloques' && (
+          <>
+            {/* ... MANTÉN TODO TU CÓDIGO ACTUAL DE BLOQUES AQUÍ ADENTRO ... */}
+          </>
+        )}
+
+        {activeTab === 'sobres' && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* ... MANTÉN TODO TU CÓDIGO ACTUAL DE SOBRES AQUÍ ADENTRO ... */}
+          </div>
+        )}
+
+        {/* --- NUEVA VISTA DE SELECCIÓN DE PLANTILLAS --- */}
+        {activeTab === 'plantillas' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Catálogo de Plantillas</h3>
+              <p className="text-[11px] text-zinc-500 font-light mt-0.5">Elige la estructura artística base para tu tarjeta digital.</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {/* Plantilla 1: Pearl Elegance (La de nuestro video - Default) */}
+              <div className="border border-purple-500 bg-purple-500/5 p-4 rounded-2xl relative group flex flex-col gap-2">
+                <div className="absolute top-3 right-3 bg-purple-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Activa
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-zinc-100">Pearl Elegance</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Estilo minimalista de alta costura inspirado en papel de acuarela texturizado, tipografías serif clásicas y transiciones limpias de cartas físicas.
+                  </p>
+                </div>
+                <div className="text-[10px] text-purple-400 font-mono mt-2">
+                  ✓ Seleccionada como predeterminada
+                </div>
+              </div>
+
+              {/* Plantilla 2: Placeholder de otra plantilla Premium futura */}
+              <div className="border border-zinc-800/80 bg-zinc-950/40 p-4 rounded-2xl opacity-60 flex flex-col gap-2">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-zinc-300">Midnight Minimal</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
+                    Un concepto oscuro con contrastes en oro dorado y fuentes sans-serif modernas. Ideal para bodas nocturnas de etiqueta rigurosa.
+                  </p>
+                </div>
+                <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-600 mt-2">
+                  🔒 Próximamente (Tier Premium)
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Contenido de las Pestañas */}
@@ -2666,7 +3322,8 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
           { id: 'Onyx', name: 'Onyx Black', hex: 'bg-zinc-900 border-zinc-700' },
           { id: 'Petroleum', name: 'Azul Petróleo', hex: 'bg-slate-800 border-slate-600' },
           { id: 'Lavender', name: 'Lila Provenzal', hex: 'bg-purple-950/60 border-purple-800/50' },
-          { id: 'Burgundy', name: 'Vino Borgoña', hex: 'bg-rose-950/60 border-rose-900/50' }
+          { id: 'Burgundy', name: 'Vino Borgoña', hex: 'bg-rose-950/60 border-rose-900/50' },
+          { id: 'Pearl', name: 'Blanco Perla', hex: 'bg-[#fdfdfc] border-zinc-300' } // <-- AGREGA ESTA LÍNEA
         ].map((color) => (
           <button
             key={color.id}
@@ -2763,6 +3420,7 @@ export default function SimuladorMovil({ template }: Props) {
     Petroleum: 'bg-slate-800 text-slate-300',
     Lavender: 'bg-purple-950/90 text-purple-200',
     Burgundy: 'bg-rose-950 text-rose-200',
+    Pearl: 'bg-[#fdfdfc] text-zinc-800 border border-zinc-200', // <-- AGREGA ESTA LÍNEA
   };
 
   const currentEnvelopeColor = colorMap[estilos.envelope.color] || 'bg-zinc-900';
@@ -4529,119 +5187,599 @@ export default function VerifyEmailPage() {
 }
 </file>
 
-<file path="app/dashboard/eventos/[id]/page.tsx">
+<file path="app/dashboard/eventos/[id]/ConfigTab.tsx">
+'use client';
+
+import { useState } from 'react';
+import MapPicker from '@/components/editor/MapPicker'; // <-- AGREGA ESTA LÍNEA
+
+interface ConfigTabProps {
+  evento: any;
+  setEvento: (evt: any) => void;
+}
+
+export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [formData, setFormData] = useState({
+    titulo: evento.titulo,
+    ubicacionCeremonia: evento.ubicacionCeremonia || '',
+    ubicacionRecepcion: evento.ubicacionRecepcion,
+    configPermiteAcompanantes: evento.configPermiteAcompanantes,
+    configMostrarMapaCeremonia: evento.configMostrarMapaCeremonia ?? true,
+    configMostrarMapaRecepcion: evento.configMostrarMapaRecepcion ?? true,
+    colorPrincipal: evento.colorPrincipal || '#9333ea',
+    coloresSecundarios: evento.coloresSecundarios || [], // <-- AGREGA ESTA LÍNEA
+    mapUrlCeremonia: evento.mapUrlCeremonia || '',
+    mapUrlRecepcion: evento.mapUrlRecepcion || '',
+  });
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setSuccess(false);
+
+    try {
+      const res = await fetch(`/api/event/${evento.id}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) throw new Error('Error al actualizar.');
+      
+      const data = await res.json();
+      setEvento(data.evento); // Sincroniza el estado global del componente padre
+      setSuccess(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      
+      {/* Configuración Básica */}
+      <div className="md:col-span-2 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 space-y-6">
+        <h3 className="text-sm font-bold tracking-wider uppercase text-purple-400">Parámetros Generales</h3>
+        
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xs text-center font-medium">
+            ✨ Configuración guardada correctamente.
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Evento</label>
+            <input
+              type="text"
+              value={formData.titulo}
+              onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Color Principal</label>
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
+                <input
+                  type="color"
+                  value={formData.colorPrincipal}
+                  onChange={(e) => setFormData({ ...formData, colorPrincipal: e.target.value })}
+                  className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
+                />
+              </div>
+              <input
+                type="text"
+                value={formData.colorPrincipal}
+                onChange={(e) => setFormData({ ...formData, colorPrincipal: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none uppercase font-mono"
+                maxLength={7}
+              />
+            </div>
+          </div>
+
+          {/* BLOQUE DE COLORES SECUNDARIOS */}
+          <div className="space-y-3 pt-4 border-t border-zinc-800/60">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Colores Secundarios (Max 3)</label>
+              {formData.coloresSecundarios.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, coloresSecundarios: [...formData.coloresSecundarios, '#ffffff'] })}
+                  className="text-[10px] text-purple-400 hover:text-purple-300 font-bold transition-colors"
+                >
+                  + Agregar Color
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-3">
+              {formData.coloresSecundarios.map((color: string, index: number) => (
+                <div key={index} className="flex items-center gap-3 animate-in fade-in duration-200">
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => {
+                        const newColors = [...formData.coloresSecundarios];
+                        newColors[index] = e.target.value;
+                        setFormData({ ...formData, coloresSecundarios: newColors });
+                      }}
+                      className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={color}
+                    onChange={(e) => {
+                      const newColors = [...formData.coloresSecundarios];
+                      newColors[index] = e.target.value;
+                      setFormData({ ...formData, coloresSecundarios: newColors });
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none uppercase font-mono"
+                    maxLength={7}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newColors = formData.coloresSecundarios.filter((_:any, i:any) => i !== index);
+                      setFormData({ ...formData, coloresSecundarios: newColors });
+                    }}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-rose-400 hover:border-rose-900/50 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {formData.coloresSecundarios.length === 0 && (
+                <p className="text-[10px] text-zinc-600 italic">No hay colores secundarios definidos.</p>
+              )}
+            </div>
+          </div>
+
+          {evento.ubicacionCeremonia !== 'No aplica' && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Ceremonia</label>
+                <input
+                  type="text"
+                  value={formData.ubicacionCeremonia}
+                  onChange={(e) => setFormData({ ...formData, ubicacionCeremonia: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+                />
+              </div>
+              <MapPicker 
+                label="Ubicación en Mapa - Ceremonia"
+                value={formData.mapUrlCeremonia}
+                onChange={(url) => setFormData({ ...formData, mapUrlCeremonia: url })}
+              />
+            </>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Lugar de la Recepción</label>
+            <input
+              type="text"
+              value={formData.ubicacionRecepcion}
+              onChange={(e) => setFormData({ ...formData, ubicacionRecepcion: e.target.value })}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+            />
+          </div>
+
+          <MapPicker 
+            label="Ubicación en Mapa - Recepción"
+            value={formData.mapUrlRecepcion}
+            onChange={(url) => setFormData({ ...formData, mapUrlRecepcion: url })}
+          />
+        </div>
+
+        <div className="pt-2 border-t border-zinc-800/60 flex justify-end">
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-5 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all disabled:opacity-50"
+          >
+            {loading ? 'Guardando...' : 'Guardar Cambios'}
+          </button>
+        </div>
+      </div>
+
+      {/* Reglas de Negocio / Toggles Especiales */}
+      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 space-y-4">
+        <h3 className="text-sm font-bold tracking-wider uppercase text-purple-400">Reglas de Control</h3>
+        <p className="text-xs text-zinc-400 leading-relaxed">Configura los límites que afectarán directamente la tarjeta de invitación digital de tus invitados.</p>
+        
+        <div className="flex items-center justify-between p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
+          <div className="space-y-0.5 pr-2">
+            <h4 className="text-xs font-semibold text-zinc-200">Acompañantes Extra</h4>
+            <p className="text-[10px] text-zinc-500">Permitir más pases asignados.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, configPermiteAcompanantes: !formData.configPermiteAcompanantes })}
+            className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ${formData.configPermiteAcompanantes ? 'bg-purple-600' : 'bg-zinc-700'}`}
+          >
+            <div className={`bg-zinc-100 w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${formData.configPermiteAcompanantes ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
+          <div className="space-y-0.5 pr-2">
+            <h4 className="text-xs font-semibold text-zinc-200">Mostrar mapa de Ceremonia</h4>
+            <p className="text-[10px] text-zinc-500">Visible en la invitación digital.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, configMostrarMapaCeremonia: !formData.configMostrarMapaCeremonia })}
+            className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ${formData.configMostrarMapaCeremonia ? 'bg-purple-600' : 'bg-zinc-700'}`}
+          >
+            <div className={`bg-zinc-100 w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${formData.configMostrarMapaCeremonia ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
+          <div className="space-y-0.5 pr-2">
+            <h4 className="text-xs font-semibold text-zinc-200">Mostrar mapa de Recepción</h4>
+            <p className="text-[10px] text-zinc-500">Visible en la invitación digital.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, configMostrarMapaRecepcion: !formData.configMostrarMapaRecepcion })}
+            className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ${formData.configMostrarMapaRecepcion ? 'bg-purple-600' : 'bg-zinc-700'}`}
+          >
+            <div className={`bg-zinc-100 w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${formData.configMostrarMapaRecepcion ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </div>
+
+    </form>
+  );
+}
+</file>
+
+<file path="app/dashboard/eventos/[id]/InvitadosTab.tsx">
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import ResumenTab from './ResumenTab';
-import InvitadosTab from './InvitadosTab';
-import ConfigTab from './ConfigTab';
-import { signOut } from 'next-auth/react';
 
-export default function EventoDashboardPage() {
-  const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('resumen');
-  const [evento, setEvento] = useState<any>(null);
+export default function InvitadosTab({ evento }: { evento: any }) {
+  const [invitados, setInvitados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState('');
 
-  // Cargar la información del evento desde la API
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'masiva' | 'manual'>('masiva');
+  // --- NUEVOS ESTADOS ---
+  const [isSavingManual, setIsSavingManual] = useState(false);
+ const [manualForm, setManualForm] = useState({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+ const handleGuardarManual = async () => {
+    if (!manualForm.nombreFamilia) return alert("El nombre del invitado es obligatorio.");
+    setIsSavingManual(true);
+    
+    try {
+      const res = await fetch('/api/event/invitados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: evento.id,
+          listaInvitados: [{
+            nombreFamilia: manualForm.nombreFamilia,
+            pasesTotales: evento.configPermiteAcompanantes ? manualForm.pasesTotales : 1,
+            telefono: manualForm.telefono
+          }]
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al guardar el invitado');
+      
+      // Recargar la lista de invitados
+      const resList = await fetch(`/api/event/invitados/list?eventId=${evento.id}`);
+      const data = await resList.json();
+      setInvitados(data.invitados || []);
+      
+      // Cerrar modal y limpiar
+      setIsModalOpen(false);
+      setManualForm({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsSavingManual(false);
+    }
+  };
+
   useEffect(() => {
-    async function fetchEventoData() {
+    async function loadInvitados() {
       try {
-        const res = await fetch(`/api/event/${id}`);
+        const res = await fetch(`/api/event/invitados/list?eventId=${evento.id}`);
         const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el evento.');
-        
-        setEvento(data.evento);
-      } catch (err: any) {
-        setError(err.message);
+        if (res.ok) setInvitados(data.invitados || []);
+      } catch (err) {
+        console.error('Error cargando invitados:', err);
       } finally {
         setLoading(false);
       }
     }
-    if (id) fetchEventoData();
-  }, [id]);
+    loadInvitados();
+  }, [evento.id]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
-      </div>
-    );
-  }
-
-  if (error || !evento) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
-        ⚠️ {error || 'Evento no encontrado.'}
-      </div>
-    );
-  }
+  // Filtrar invitados por nombre de familia o teléfono en tiempo real
+  const invitadosFiltrados = invitados.filter(inv =>
+    inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) ||
+    inv.telefono.includes(busqueda)
+  );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 relative overflow-hidden">
-      {/* Luz ambiental de fondo */}
-      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full pointer-events-none" />
-
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* HEADER DEL EVENTO */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-bold tracking-wider uppercase">
-                {evento.tipo}
-              </span>
-              <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
-            <Link
-              href={`/dashboard/eventos/${id}/invitacion`}
-              className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md shadow-purple-600/10 w-fit"
-            >
-              🎨 Diseñar invitación
-            </Link>
-          </div>
-          
-          {/* Menú de Pestañas (Tabs Nav) */}
-          <div className="flex bg-zinc-900/60 backdrop-blur-md p-1 border border-zinc-800 rounded-xl self-start md:self-auto">
-            {[
-              { id: 'resumen', label: '📊 Resumen' },
-              { id: 'invitados', label: '👥 Invitados' },
-              { id: 'config', label: '⚙️ Configuración' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          {/* 🚪 BOTÓN DE CERRAR SESIÓN PREMIUM */}
-          <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-              title="Cerrar Sesión"
-            >
-              <span>🚪</span>
-              <span className="hidden sm:inline">Cerrar Sesión</span>
-            </button>
-          </div>
-
-        {/* CONTENIDO DE LAS PESTAÑAS */}
-        <div className="animate-in fade-in duration-200">
-          {activeTab === 'resumen' && <ResumenTab evento={evento} />}
-          {activeTab === 'invitados' && <InvitadosTab eventoId={evento.id} />}
-          {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
-        </div>
-
+    <div className="space-y-4">
+      
+      {/* ACCIONES SUPERIORES */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/20 p-4 border border-zinc-800/60 rounded-2xl">
+        <input
+          type="text"
+          placeholder="🔍 Buscar familia o teléfono..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none"
+        />
+        <button 
+          className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md"
+          onClick={() => setIsModalOpen(true)}
+        >
+          ➕ Agregar Familia / Grupo
+        </button>
       </div>
+
+      {/* TABLA DE INVITADOS */}
+      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="p-10 text-center text-xs text-zinc-500 animate-pulse">Cargando base de datos de pases...</div>
+        ) : invitadosFiltrados.length === 0 ? (
+          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados registrados para este evento.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-800/80 bg-zinc-950/40 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <th className="p-4">Familia / Grupo</th>
+                  <th className="p-4">Código Acceso</th>
+                  <th className="p-4 text-center">Pases Asignados</th>
+                  <th className="p-4 text-center">Estado RSVP</th>
+                  <th className="p-4">Teléfono</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50 text-xs">
+                {invitadosFiltrados.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-zinc-900/20 transition-colors">
+                    <td className="p-4 font-bold text-zinc-200">{inv.nombreFamilia}</td>
+                    <td className="p-4 font-mono text-[11px] text-purple-400 font-semibold">{inv.codigoAcceso}</td>
+                    <td className="p-4 text-center font-semibold text-zinc-300">{inv.pasesTotales}</td>
+                    <td className="p-4 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        inv.statusRSVP === 'CONFIRMADO' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                        inv.statusRSVP === 'RECHAZADO' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+                        'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                      }`}>
+                        {inv.statusRSVP}
+                      </span>
+                    </td>
+                    <td className="p-4 text-zinc-400 font-mono">{inv.telefono}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL AGREGAR INVITADO */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-zinc-100">Agregar Invitados</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
+                ✕
+              </button>
+            </div>
+
+            <div className="flex bg-zinc-950 p-1 rounded-xl mb-6">
+              <button
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'masiva' ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                onClick={() => setModalTab('masiva')}
+              >
+                Carga Masiva
+              </button>
+              <button
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'manual' ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                onClick={() => setModalTab('manual')}
+              >
+                Registro Manual
+              </button>
+            </div>
+
+            {modalTab === 'masiva' ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+                  <span className="text-3xl mb-2">📄</span>
+                  <p className="text-sm text-zinc-300 font-medium mb-1">Sube tu archivo de Excel o CSV</p>
+                  <p className="text-xs text-zinc-500 mb-4">Asegúrate de seguir el formato de plantilla.</p>
+                  <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+                    Seleccionar Archivo
+                    <input type="file" accept=".csv, .xlsx" className="hidden" />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {evento.configPermiteAcompanantes ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre Familia / Grupo</label>
+                      <input 
+                        type="text" 
+                        value={manualForm.nombreFamilia}
+                        onChange={(e) => setManualForm({...manualForm, nombreFamilia: e.target.value})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                        placeholder="Ej: Familia Pérez" 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases Asignados</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={manualForm.pasesTotales}
+                        onChange={(e) => setManualForm({...manualForm, pasesTotales: parseInt(e.target.value) || 1})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Invitado</label>
+                    <input 
+                      type="text" 
+                      value={manualForm.nombreFamilia}
+                      onChange={(e) => setManualForm({...manualForm, nombreFamilia: e.target.value})}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                      placeholder="Ej: Juan Pérez" 
+                    />
+                    <p className="text-[10px] text-amber-500/80 mt-1">⚠️ Este evento no permite acompañantes (Pase único).</p>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
+                  <input 
+                    type="tel" 
+                    value={manualForm.telefono}
+                    onChange={(e) => setManualForm({...manualForm, telefono: e.target.value})}
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" 
+                    placeholder="+52..." 
+                  />
+                </div>
+                <button 
+                  onClick={handleGuardarManual}
+                  disabled={isSavingManual}
+                  className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                >
+                  {isSavingManual ? 'Guardando...' : 'Guardar Invitado'}
+                </button>
+              </div>
+            )}
+            
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+</file>
+
+<file path="app/dashboard/eventos/[id]/ResumenTab.tsx">
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export default function ResumenTab({ evento }: { evento: any }) {
+  const { metricas, fecha, miembros } = evento;
+  const [tiempoRestante, setTiempoRestante] = useState('');
+
+  // Cuenta regresiva matemática para el evento
+  useEffect(() => {
+    const target = new Date(fecha.split('T')[0] + 'T12:00:00').getTime();
+
+    const calculateTimeLeft = () => {
+      const ahora = new Date().getTime();
+      const diferencia = target - ahora;
+
+      if (diferencia <= 0) {
+        setTiempoRestante('¡Llegó el gran día! 🎉');
+        return true;
+      }
+
+      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
+
+      setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
+      return false;
+    };
+
+    const reachedTarget = calculateTimeLeft();
+    if (reachedTarget) return;
+
+    const interval = setInterval(() => {
+      const reached = calculateTimeLeft();
+      if (reached) clearInterval(interval);
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [fecha]);
+
+  return (
+    <div className="space-y-6">
+      
+      {/* CARD DE CUENTA REGRESIVA */}
+      <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
+          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
+        </div>
+        <div className="text-2xl font-black bg-purple-500/10 text-purple-300 border border-purple-500/30 px-6 py-2.5 rounded-xl tracking-wider font-mono">
+          {tiempoRestante || 'Calculando...'}
+        </div>
+      </div>
+
+      {/* REJILLA DE MÉTRICAS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400' },
+          { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400' },
+          { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400' },
+          { title: 'Pases Totales Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400' },
+        ].map((item, idx) => (
+          <div key={idx} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2">
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-[11px] font-bold uppercase tracking-wider">{item.title}</span>
+              <span className="text-sm">{item.icon}</span>
+            </div>
+            <p className={`text-2xl font-extrabold ${item.color}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* COLABORADORES ACTIVOS EN ESTE DASHBOARD */}
+      <div className="bg-zinc-900/20 border border-zinc-800/60 rounded-2xl p-6 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Equipo de Organización</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {evento.members?.map((member: any) => (
+            <div key={member.id} className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-600/10 border border-purple-500/20 flex items-center justify-center font-bold text-purple-400 text-xs uppercase">
+                  {member.user?.nombre?.[0] || member.correoInvitado[0]}
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-zinc-200">
+                    {member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}
+                  </h4>
+                  <p className="text-[10px] text-zinc-500">{member.correoInvitado}</p>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold bg-zinc-900 px-2 py-1 rounded-md text-zinc-400 border border-zinc-800 uppercase">
+                {member.role === 'PERSONALIZADO' ? member.rolPersonalizado : member.role}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -5259,6 +6397,8 @@ export async function POST(request: Request) {
       ubicacionRecepcion, 
       miRol, 
       configPermiteAcompanantes,
+      colorPrincipal,
+      coloresSecundarios,
       colaboradores 
     } = body;
 
@@ -5292,6 +6432,8 @@ export async function POST(request: Request) {
           ubicacionCeremonia: ubicacionCeremonia || null,
           ubicacionRecepcion,
           configPermiteAcompanantes: configPermiteAcompanantes ?? true,
+          colorPrincipal,
+          coloresSecundarios: coloresSecundarios || [],
           ownerId: userId, // ✨ El creador queda registrado nativamente como el Dueño
         },
       });
@@ -5687,6 +6829,148 @@ export async function DELETE(
 }
 </file>
 
+<file path="app/dashboard/eventos/[id]/page.tsx">
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import ResumenTab from './ResumenTab';
+import InvitadosTab from './InvitadosTab';
+import ConfigTab from './ConfigTab';
+import { signOut } from 'next-auth/react';
+
+function DashboardContent() {
+  const { id } = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  const activeTab = searchParams.get('tab') || 'resumen';
+  const [evento, setEvento] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Cargar la información del evento desde la API
+  useEffect(() => {
+    async function fetchEventoData() {
+      try {
+        const res = await fetch(`/api/event/${id}`);
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el evento.');
+        
+        setEvento(data.evento);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (id) fetchEventoData();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+      </div>
+    );
+  }
+
+  if (error || !evento) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
+        ⚠️ {error || 'Evento no encontrado.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 relative overflow-hidden">
+      {/* Luz ambiental de fondo */}
+      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* HEADER DEL EVENTO */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-bold tracking-wider uppercase">
+                {evento.tipo}
+              </span>
+              <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
+          </div>
+          
+          {/* Menú de Pestañas (Tabs Nav) */}
+          <div className="flex bg-zinc-900/60 backdrop-blur-md p-1 border border-zinc-800 rounded-xl self-start md:self-auto overflow-x-auto">
+            {[
+              { id: 'resumen', label: '📊 Resumen' },
+              { id: 'invitados', label: '👥 Invitados' },
+              { id: 'config', label: '⚙️ Configuración' },
+              { id: 'diseno', label: '🎨 Diseñar', href: `/dashboard/eventos/${id}/invitacion` },
+            ].map((tab) => {
+              if (tab.href) {
+                return (
+                  <Link
+                    key={tab.id}
+                    href={tab.href}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200"
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => router.push(`${pathname}?tab=${tab.id}`, { scroll: false })}
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* 🚪 BOTÓN DE CERRAR SESIÓN PREMIUM */}
+          <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+              title="Cerrar Sesión"
+            >
+              <span>🚪</span>
+              <span className="hidden sm:inline">Cerrar Sesión</span>
+            </button>
+          </div>
+
+        {/* CONTENIDO DE LAS PESTAÑAS */}
+        <div className="animate-in fade-in duration-200">
+          {activeTab === 'resumen' && <ResumenTab evento={evento} />}
+          {activeTab === 'invitados' && <InvitadosTab evento={evento} />}
+          {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+export default function EventoDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+</file>
+
 <file path="prisma/schema.prisma">
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
@@ -5800,8 +7084,14 @@ model Event {
   tipo                      EventType           @default(BODA) 
   fecha                     DateTime
   slug                      String              @unique 
+  colorPrincipal            String?             @default("#9333ea")
+  coloresSecundarios        String[]            @default([])
   ubicacionCeremonia        String?             
+  mapUrlCeremonia           String?
   ubicacionRecepcion        String              
+  mapUrlRecepcion           String?
+  configMostrarMapaCeremonia Boolean            @default(true)
+  configMostrarMapaRecepcion Boolean            @default(true)
   configPermiteAcompanantes Boolean             @default(true) 
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
@@ -5900,6 +7190,7 @@ model PaseDigital {
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@react-google-maps/api": "^2.20.8",
     "@supabase/supabase-js": "^2.106.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",

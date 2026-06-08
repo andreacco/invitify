@@ -111,10 +111,13 @@ model Event {
   fecha                     DateTime
   slug                      String              @unique 
   colorPrincipal            String?             @default("#9333ea")
+  coloresSecundarios        String[]            @default([])
   ubicacionCeremonia        String?             
   mapUrlCeremonia           String?
   ubicacionRecepcion        String              
   mapUrlRecepcion           String?
+  configMostrarMapaCeremonia Boolean            @default(true)
+  configMostrarMapaRecepcion Boolean            @default(true)
   configPermiteAcompanantes Boolean             @default(true) 
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt

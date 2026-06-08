@@ -18,7 +18,10 @@ export async function PUT(
       ubicacionCeremonia, 
       ubicacionRecepcion, 
       configPermiteAcompanantes,
+      configMostrarMapaCeremonia,
+      configMostrarMapaRecepcion,
       colorPrincipal,
+      coloresSecundarios,
       mapUrlCeremonia,
       mapUrlRecepcion
     } = body;
@@ -30,7 +33,10 @@ export async function PUT(
         ubicacionCeremonia,
         ubicacionRecepcion,
         configPermiteAcompanantes,
+        configMostrarMapaCeremonia,
+        configMostrarMapaRecepcion,
         colorPrincipal,
+        coloresSecundarios,
         mapUrlCeremonia,
         mapUrlRecepcion
       }
