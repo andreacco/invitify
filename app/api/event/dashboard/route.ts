@@ -17,9 +17,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Falta el parámetro eventId.' }, { status: 400 });
     }
 
-    // 2. Verificar que el usuario pertenece al evento
-    const membresia = await prisma.eventMember.findUnique({
-      where: { eventId_userId: { eventId, userId } }
+// 2. Verificar que el usuario pertenece al evento
+    const membresia = await prisma.eventMember.findFirst({
+      where: { eventId, userId }
     });
 
     if (!membresia) {

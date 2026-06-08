@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 
 // ==========================================
 // 1. GET: CONSULTAR EL ESTADO DE LA INVITACIÓN
 // ==========================================
 export async function GET(
   request: Request,
-  { params }: { params: { codigoAcceso: string } }
+  { params }: { params: Promise<{ codigoAcceso: string }> }
 ) {
   try {
-    const { codigoAcceso } = params;
+    const { codigoAcceso } = await params;
 
     // Buscar el grupo familiar por su código único de invitación
     const invitacion = await prisma.invitadoPrincipal.findUnique({
@@ -44,14 +45,14 @@ export async function GET(
 // ==========================================
 export async function POST(
   request: Request,
-  { params }: { params: { codigoAcceso: string } }
+  { params }: { params: Promise<{ codigoAcceso: string }> } // 1. Agregamos Promise aquí
 ) {
   try {
-    const { codigoAcceso } = params;
+    const { codigoAcceso } = await params; // 2. Agregamos await aquí
     const body = await request.json();
     
     // respuestasAsistentes será un array de objetos con el id de cada asistente, 
-    // si asiste, su menú, restricciones y canción sugerida.
+   // si asiste, su menú, restricciones y canción sugerida.
     const { respuestasAsistentes, observaciones } = body;
 
     if (!respuestasAsistentes || !Array.isArray(respuestasAsistentes)) {
@@ -71,14 +72,15 @@ export async function POST(
       return NextResponse.json({ error: 'Invitación no encontrada.' }, { status: 404 });
     }
 
-    // 2. Procesar la confirmación dentro de una Transacción
-    const resultadoRSVP = await prisma.$transaction(async (tx) => {
+// 2. Procesar la confirmación dentro de una Transacción
+    const resultadoRSVP = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       let totalAsistentesConfirmados = 0;
 
       // A. Actualizar cada asistente individualmente con sus preferencias de menú/alergias
       for (const res of respuestasAsistentes) {
-        // Verificar que el asistente realmente pertenezca a esta familia
-        const pertenece = invitacion.asistentes.some(a => a.id === res.id);
+        // Tipamos 'a' para que TypeScript sepa que es un objeto con un 'id'
+        const pertenece = invitacion.asistentes.some((a: { id: string }) => a.id === res.id);
+        
         if (!pertenece) continue;
 
         if (res.asiste) {

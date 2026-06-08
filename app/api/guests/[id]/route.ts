@@ -4,13 +4,14 @@ import { prisma } from '@/lib/db';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 1. params ahora es una promesa
 ) {
   try {
     const auth = await requireVerifiedApiSession();
     if (!auth.ok) return auth.response;
 
-    const { id } = params;
+    // 2. Extraemos el id usando await
+    const { id } = await params;
 
     await prisma.invitadoPrincipal.delete({
       where: { id }

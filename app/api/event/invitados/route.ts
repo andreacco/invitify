@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireVerifiedApiSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client'; // 1. Importamos los tipos de Prisma
 
 function generarCodigoAcceso(nombre: string): string {
   const base = nombre
@@ -46,11 +47,12 @@ export async function POST(request: Request) {
     const permiteAcompanantes = eventoConfig.configPermiteAcompanantes;
 
     // 2. Procesar la carga masiva adaptada a las reglas de la boda
-    const resultado = await prisma.$transaction(async (tx) => {
+    // Añadimos el tipo a 'tx' para que TypeScript no se queje
+    const resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const registrosCreados = [];
 
       for (const invitado of listaInvitados) {
-        const { nombreFamilia, pasesTotales, nombresAsistentes } = invitado;
+        const { nombreFamilia, pasesTotales, nombresAsistentes, telefono } = invitado;
 
         if (!nombreFamilia) continue;
 
@@ -58,23 +60,26 @@ export async function POST(request: Request) {
         let listaAsistentesFinales: string[] = [];
 
         if (permiteAcompanantes) {
-          // MODALIDAD TRADICIONAL: Respeta el Excel con grupos, +1 y familias
+          // MODALIDAD TRADICIONAL
           pasesFinales = parseInt(pasesTotales) || 1;
           listaAsistentesFinales = Array.isArray(nombresAsistentes) && nombresAsistentes.length > 0
             ? nombresAsistentes 
             : [nombreFamilia];
         } else {
-          // MODALIDAD INDIVIDUAL (Tu Boda): Cada fila es una persona única y no hay pases extra
+          // MODALIDAD INDIVIDUAL
           pasesFinales = 1;
-          listaAsistentesFinales = [nombreFamilia]; // El "nombreFamilia" actúa directamente como el nombre completo del invitado único
+          listaAsistentesFinales = [nombreFamilia]; 
         }
 
         const codigoAcceso = generarCodigoAcceso(nombreFamilia);
 
         const nuevoGrupo = await tx.invitadoPrincipal.create({
           data: {
-            eventId,
-            nombreFamilia, // Si es individual, este campo guarda el nombre de la persona
+            // 2. Conectamos la relación de forma explícita
+            event: { connect: { id: eventId } }, 
+            nombreFamilia,
+            // 3. Proporcionamos un valor por defecto al teléfono si el Excel no lo trae
+            telefono: telefono || "", 
             pasesTotales: pasesFinales,
             codigoAcceso,
             asistentes: {

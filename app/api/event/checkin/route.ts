@@ -18,10 +18,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Verificar que el usuario que escanea realmente tiene un rol autorizado para este evento
-    const membresiaStaff = await prisma.eventMember.findUnique({
+  // 2. Verificar que el usuario que escanea realmente tiene un rol autorizado para este evento
+    const membresiaStaff = await prisma.eventMember.findFirst({
       where: {
-        eventId_userId: { eventId, userId }
+        eventId: eventId,
+        userId: userId
       }
     });
 
