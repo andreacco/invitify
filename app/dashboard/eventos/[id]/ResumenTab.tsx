@@ -8,16 +8,15 @@ export default function ResumenTab({ evento }: { evento: any }) {
 
   // Cuenta regresiva matemática para el evento
   useEffect(() => {
-    const target = new Date(fecha).getTime();
+    const target = new Date(fecha.split('T')[0] + 'T12:00:00').getTime();
 
-    const interval = setInterval(() => {
+    const calculateTimeLeft = () => {
       const ahora = new Date().getTime();
       const diferencia = target - ahora;
 
       if (diferencia <= 0) {
         setTiempoRestante('¡Llegó el gran día! 🎉');
-        clearInterval(interval);
-        return;
+        return true;
       }
 
       const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
@@ -25,6 +24,15 @@ export default function ResumenTab({ evento }: { evento: any }) {
       const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
 
       setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
+      return false;
+    };
+
+    const reachedTarget = calculateTimeLeft();
+    if (reachedTarget) return;
+
+    const interval = setInterval(() => {
+      const reached = calculateTimeLeft();
+      if (reached) clearInterval(interval);
     }, 60000);
 
     return () => clearInterval(interval);
@@ -37,7 +45,7 @@ export default function ResumenTab({ evento }: { evento: any }) {
       <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
-          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha).toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
+          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
         </div>
         <div className="text-2xl font-black bg-purple-500/10 text-purple-300 border border-purple-500/30 px-6 py-2.5 rounded-xl tracking-wider font-mono">
           {tiempoRestante || 'Calculando...'}
