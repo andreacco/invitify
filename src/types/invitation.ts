@@ -6,20 +6,6 @@ export interface EnvelopeConfig {
   waxSealColor: string; // Color del sello (ej. '#b45309')
 }
   
-¡Totalmente de acuerdo! Como CTO, considero que el Autoguardado (Auto-save) y el principio WYSIWYG (What You See Is What You Get) son innegociables en un editor premium. Si un usuario se queda sin luz o internet, perder su diseño arruina la confianza en el producto.
-
-Además, poder apagar y encender bloques le da libertad total al usuario para armar una invitación tan sencilla o tan detallada como necesite.
-
-Vamos a implementar esto de forma robusta. Haremos que tu base de datos migre los datos antiguos automáticamente al vuelo y aplicaremos un debounce de 1.5 segundos para que la base de datos se guarde silenciosamente mientras el usuario escribe.
-
-Sigue estos 4 pasos exactos (copia y pega).
-
-1️⃣ Actualizar los Tipos y el Default Template
-Le enseñaremos al sistema que ahora todos los bloques tienen un "switch" de encendido/apagado.
-
-Abre src/types/invitation.ts y actualiza las interfaces de la línea 10 a la 33 para que incluyan el enabled:
-
-TypeScript
   export interface HeaderBlock {
     enabled?: boolean; // <-- NUEVO
     coupleNames: string;
