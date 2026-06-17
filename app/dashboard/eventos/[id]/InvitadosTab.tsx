@@ -10,22 +10,68 @@ export default function InvitadosTab({ evento }: { evento: any }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'masiva' | 'manual'>('masiva');
 
-  useEffect(() => {
-    async function loadInvitados() {
-      try {
-        const res = await fetch(`/api/event/invitados/list?eventId=${evento.id}`);
-        const data = await res.json();
-        if (res.ok) setInvitados(data.invitados || []);
-      } catch (err) {
-        console.error('Error cargando invitados:', err);
-      } finally {
-        setLoading(false);
-      }
+  // --- NUEVOS ESTADOS PARA EL FORMULARIO MANUAL ---
+  const [isSaving, setIsSaving] = useState(false);
+  const [manualData, setManualData] = useState({
+    nombreFamilia: '',
+    pasesTotales: 1,
+    telefono: ''
+  });
+
+  const loadInvitados = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/event/invitados/list?eventId=${evento.id}`);
+      const data = await res.json();
+      if (res.ok) setInvitados(data.invitados || []);
+    } catch (err) {
+      console.error('Error cargando invitados:', err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadInvitados();
   }, [evento.id]);
 
-  // Filtrar invitados por nombre de familia o teléfono en tiempo real
+  // --- NUEVA FUNCIÓN PARA GUARDAR EL INVITADO ---
+  const handleGuardarManual = async () => {
+    if (!manualData.nombreFamilia.trim()) {
+      return alert('El nombre de la familia o invitado es obligatorio.');
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/event/invitados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: evento.id,
+          listaInvitados: [{
+            nombreFamilia: manualData.nombreFamilia,
+            pasesTotales: evento.configPermiteAcompanantes ? manualData.pasesTotales : 1,
+            telefono: manualData.telefono,
+            nombresAsistentes: [manualData.nombreFamilia] // Por defecto
+          }]
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al guardar el invitado');
+      
+      // Limpiar formulario, recargar lista y cerrar modal
+      setManualData({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+      setIsModalOpen(false);
+      await loadInvitados();
+      
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un problema al guardar el invitado.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const invitadosFiltrados = invitados.filter(inv =>
     inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) ||
     inv.telefono.includes(busqueda)
@@ -56,7 +102,7 @@ export default function InvitadosTab({ evento }: { evento: any }) {
         {loading ? (
           <div className="p-10 text-center text-xs text-zinc-500 animate-pulse">Cargando base de datos de pases...</div>
         ) : invitadosFiltrados.length === 0 ? (
-          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados registrados para este evento.</div>
+          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados registrados.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -101,24 +147,12 @@ export default function InvitadosTab({ evento }: { evento: any }) {
             
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-zinc-100">Agregar Invitados</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
-                ✕
-              </button>
+              <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">✕</button>
             </div>
 
             <div className="flex bg-zinc-950 p-1 rounded-xl mb-6">
-              <button
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'masiva' ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                onClick={() => setModalTab('masiva')}
-              >
-                Carga Masiva
-              </button>
-              <button
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'manual' ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                onClick={() => setModalTab('manual')}
-              >
-                Registro Manual
-              </button>
+              <button className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'masiva' ? 'bg-purple-600 text-white' : 'text-zinc-400'}`} onClick={() => setModalTab('masiva')}>Carga Masiva</button>
+              <button className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${modalTab === 'manual' ? 'bg-purple-600 text-white' : 'text-zinc-400'}`} onClick={() => setModalTab('manual')}>Registro Manual</button>
             </div>
 
             {modalTab === 'masiva' ? (
@@ -126,8 +160,7 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                 <div className="border-2 border-dashed border-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center text-center">
                   <span className="text-3xl mb-2">📄</span>
                   <p className="text-sm text-zinc-300 font-medium mb-1">Sube tu archivo de Excel o CSV</p>
-                  <p className="text-xs text-zinc-500 mb-4">Asegúrate de seguir el formato de plantilla.</p>
-                  <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+                  <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors mt-4">
                     Seleccionar Archivo
                     <input type="file" accept=".csv, .xlsx" className="hidden" />
                   </label>
@@ -139,26 +172,51 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                   <>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre Familia / Grupo</label>
-                      <input type="text" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Familia Pérez" />
+                      <input 
+                        type="text" 
+                        value={manualData.nombreFamilia}
+                        onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Familia Pérez" 
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases Asignados</label>
-                      <input type="number" min="1" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: 4" />
+                      <input 
+                        type="number" min="1" 
+                        value={manualData.pasesTotales}
+                        onChange={e => setManualData({...manualData, pasesTotales: parseInt(e.target.value) || 1})}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: 4" 
+                      />
                     </div>
                   </>
                 ) : (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Invitado</label>
-                    <input type="text" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Juan Pérez" />
+                    <input 
+                      type="text" 
+                      value={manualData.nombreFamilia}
+                      onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Juan Pérez" 
+                    />
                     <p className="text-[10px] text-amber-500/80 mt-1">⚠️ Este evento no permite acompañantes (Pase único).</p>
                   </div>
                 )}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
-                  <input type="tel" className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." />
+                  <input 
+                    type="tel" 
+                    value={manualData.telefono}
+                    onChange={e => setManualData({...manualData, telefono: e.target.value})}
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." 
+                  />
                 </div>
-                <button className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all">
-                  Guardar Invitado
+                {/* 🚀 BOTÓN CONECTADO */}
+                <button 
+                  onClick={handleGuardarManual}
+                  disabled={isSaving}
+                  className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all"
+                >
+                  {isSaving ? 'Guardando...' : 'Guardar Invitado'}
                 </button>
               </div>
             )}
