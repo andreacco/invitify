@@ -65,7 +65,8 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
           : 'top-1/2 left-[42%] @md:left-1/2 w-[220px] @md:w-[320px] h-[320px] @md:h-[460px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] opacity-90 shadow-2xl'
       }`}>
         <img src={portadaImagen} alt="Portada" className="w-full h-full object-cover transition-transform duration-[2000ms] scale-105" />
-        <div className={`absolute inset-0 bg-gradient-to-t from-[#fdfdfc] via-transparent to-transparent transition-opacity duration-1000 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
+        {/* 👇 AQUÍ ESTÁ EL DEGRADADO MODIFICADO: Más bajito (h-[30%]) y pegado abajo */}
+        <div className={`absolute bottom-0 left-0 w-full h-[30%] bg-gradient-to-t from-[#fdfdfc] via-[#fdfdfc]/80 to-transparent transition-opacity duration-1000 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
       {/* EL SOBRE DIGITAL ANIMADO */}
