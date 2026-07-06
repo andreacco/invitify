@@ -13,6 +13,15 @@ export default function WaxSealSVG({ design, color, initials = 'A&B', className 
 
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
+      {design === 'custom' ? (
+        // SI ES TU SELLO PNG PREMIUM:
+        <img 
+          src="/Sello-jya.png" 
+          alt="Sello de la Boda" 
+          className="w-full h-full object-contain drop-shadow-2xl" 
+        />
+      ) : (
+        // SI ES UN SELLO SVG GENÉRICO (El código viejo):
       <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl" style={{ color }}>
         <defs>
           <filter id="wax-texture">
@@ -67,6 +76,7 @@ export default function WaxSealSVG({ design, color, initials = 'A&B', className 
           )}
         </g>
       </svg>
+      )}
     </div>
   );
 }

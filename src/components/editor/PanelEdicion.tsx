@@ -204,7 +204,7 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
 
             {/* 2. PATRÓN DE FONDO Y APERTURA */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Textura / Patrón</label>
                 <select
                   value={template.estilos.envelope.pattern || 'none'}
@@ -217,6 +217,8 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
                   <option value="botanical">Hojas Botánicas</option>
                   <option value="floral">Puntos Florales</option>
                   <option value="wheat">Espigas de Trigo</option>
+                  {/* 👇 NUEVA OPCIÓN PREMIUM 👇 */}
+                  <option value="real">Patrón Real (Grabado)</option>
                 </select>
               </div>
 
@@ -233,6 +235,7 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
                   <option value="middle">Apertura Central</option>
                   <option value="left">Solapa Izquierda</option>
                   <option value="right">Solapa Derecha</option>
+                  <option value="vertical">Apertura Vertical Asimétrica (Premium)</option>
                 </select>
               </div>
             </div>
@@ -264,7 +267,8 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
                   { id: 'rose', name: 'Rosa de Castilla', desc: 'Símbolo romántico clásico' },
                   { id: 'lotus', name: 'Flor de Loto', desc: 'Elegancia orgánica' },
                   { id: 'eucalyptus', name: 'Rama de Eucalipto', desc: 'Estilo botánico moderno' },
-                  { id: 'blank', name: 'Liso', desc: 'Sello de cera sin relieve' }
+                  { id: 'blank', name: 'Liso', desc: 'Sello de cera sin relieve' },
+                  { id: 'custom', name: 'Sello Original PNG', desc: 'Sello transparente cargado' }
                 ].map((seal) => (
                   <button
                     key={seal.id}

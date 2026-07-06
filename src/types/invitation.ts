@@ -1,11 +1,11 @@
-export interface EnvelopeConfig {
-  color: string; // Color base del sobre (ej. '#1e293b' o 'bg-zinc-900')
-  pattern: 'none' | 'floral' | 'botanical' | 'wheat'; // Patrón de fondo SVG
-  openingStyle: 'top' | 'middle' | 'left' | 'right'; // Hacia dónde abre la solapa
-  waxSealDesign: 'lotus' | 'monogram' | 'eucalyptus' | 'rose' | 'blank'; // Diseño del sello SVG
-  waxSealColor: string; // Color del sello (ej. '#b45309')
-}
-  
+  export interface EnvelopeConfig {
+    color: string;
+    pattern: 'none' | 'floral' | 'botanical' | 'wheat' | 'real'; 
+    openingStyle: 'top' | 'middle' | 'left' | 'right' | 'vertical'; // 👈 NUEVO
+    waxSealDesign: 'lotus' | 'monogram' | 'eucalyptus' | 'rose' | 'blank' | 'shield' | 'custom'; // 👈 NUEVO
+    waxSealColor: string;
+  }
+
   export interface HeaderBlock {
     enabled?: boolean; // <-- NUEVO
     coupleNames: string;
