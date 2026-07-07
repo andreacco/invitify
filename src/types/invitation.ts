@@ -6,56 +6,120 @@
     waxSealColor: string;
   }
 
-  export interface HeaderBlock {
-    enabled?: boolean; // <-- NUEVO
-    coupleNames: string;
-    welcomeText: string;
-    coverPhoto: string;
-  }
-  
-  export interface DressCodeBlock {
-    enabled?: boolean; // <-- NUEVO
-    style: 'Formal' | 'Semi-Formal' | 'Casual' | 'Custom';
-    description: string;
-  }
-  
-  export interface ItineraryItem {
-    hora: string;
-    actividad: string;
-  }
+export interface HeaderBlock {
+  enabled?: boolean;
+  coverPhoto?: string;
+  coupleNames?: string;
+  welcomeText?: string;
+  subtitle1?: string;
+  subtitle2?: string;
+}
 
-  // <-- NUEVA INTERFAZ PARA EL ITINERARIO -->
-  export interface ItineraryBlock {
-    enabled?: boolean;
-    items: ItineraryItem[];
-  }
-  
-  export interface CountdownBlock {
-    enabled: boolean;
-    message: string;
-  }
-  
-  // ... (TemplateEstilos se queda igual) ...
-  
-  export interface TemplateEstilos {
-    theme: string;
-    typography: string;
-    musicUrl: string;
-    envelope: EnvelopeConfig;
-  }
-  
-  export interface TemplateBloques {
-    header: HeaderBlock;
-    dressCode: DressCodeBlock;
-    itinerary: ItineraryBlock; // <-- AHORA ES UN OBJETO, NO UN ARRAY
-    countdown: CountdownBlock;
-  }
-  
-  // Este es el objeto global que salvaremos en la base de datos
-  export interface InvitationTemplateState {
-    estilos: TemplateEstilos;
-    bloques: TemplateBloques;
-  }
+export interface RsvpFormBlock {
+  enabled?: boolean;
+  askDietary?: boolean;
+  askAccommodation?: boolean;
+  askEvents?: boolean;
+  askTransportation?: boolean;
+  askSong?: boolean;
+  askChildren?: boolean;
+}
+
+export interface DateTimeBlock {
+  enabled?: boolean;
+  date?: string;
+  time?: string;
+  timeFormat?: '12h' | '24h';
+  showAddToCalendar?: boolean;
+}
+
+export interface VenueItem {
+  id: string;
+  name: string;
+  address: string;
+  cityState: string;
+  mapLink: string;
+  photoUrl?: string;
+  enabled?: boolean;
+}
+
+export interface VenuesBlock {
+  enabled?: boolean;
+  items?: VenueItem[];
+}
+
+export interface ItineraryItem {
+  id?: string;
+  hora: string;
+  actividad: string;
+  ubicacion?: string;
+  photoUrl?: string;
+}
+
+export interface ItineraryBlock {
+  enabled?: boolean;
+  items?: ItineraryItem[];
+}
+
+export interface ParentsBlock {
+  enabled?: boolean;
+  brideParents?: string;
+  groomParents?: string;
+  description?: string;
+}
+
+export interface DressCodeBlock {
+  enabled?: boolean;
+  style?: string;
+  description?: string;
+}
+
+export interface CountdownBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface MenuBlock {
+  enabled?: boolean;
+  description?: string;
+}
+
+export interface ClosingMessageBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface RsvpDetailsBlock {
+  enabled?: boolean;
+  rsvpByText?: string;
+  deadlineDate?: string;
+  contactPhone?: string;
+}
+
+export interface GiftsBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface TemplateBloques {
+  header: HeaderBlock;
+  rsvpForm?: RsvpFormBlock;
+  dateTime?: DateTimeBlock;
+  venues?: VenuesBlock;
+  itinerary: ItineraryBlock;
+  parents?: ParentsBlock;
+  dressCode: DressCodeBlock;
+  countdown: CountdownBlock;
+  menu?: MenuBlock;
+  closingMessage?: ClosingMessageBlock;
+  rsvpDetails?: RsvpDetailsBlock;
+  gifts?: GiftsBlock;
+}
+
+export interface InvitationTemplateState {
+  estilos: any;
+  bloques: TemplateBloques;
+}
 
   export interface Asistente {
     id?: string;
