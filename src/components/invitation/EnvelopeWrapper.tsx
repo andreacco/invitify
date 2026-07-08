@@ -98,15 +98,101 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN */}
+      {/* MODAL DE CONFIRMACIÓN (RSVP) */}
       {isRsvpModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-[#fdfdfc] p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
-              <div className="text-center py-4">
-                 <h2 className="text-xl font-bold">¡Confirma tu asistencia!</h2>
-                 <p className="text-xs text-zinc-500 mt-2">Funcionalidad preservada.</p>
-                 <button onClick={() => setIsRsvpModalOpen(false)} className="mt-4 px-4 py-2 bg-black text-white rounded-lg text-xs">Cerrar</button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-[#fdfdfc] p-8 rounded-3xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-none">
+              
+              <div className="text-center mb-8">
+                 <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
+                 <p className="text-xs text-zinc-500 mt-2">Pase individual exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
               </div>
+
+              {!isSubmitting ? (
+                <div className="space-y-6">
+                  {/* BOTONES PRINCIPALES SÍ/NO */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: true })))}
+                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === true ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-emerald-200'}`}
+                    >
+                      <span className="text-xl">Sí</span>
+                      <span className="text-[10px] uppercase tracking-wider">Acepto con gusto</span>
+                    </button>
+                    <button 
+                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: false })))}
+                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === false ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-rose-200'}`}
+                    >
+                      <span className="text-xl">No</span>
+                      <span className="text-[10px] uppercase tracking-wider">Declino con pesar</span>
+                    </button>
+                  </div>
+
+                  {/* FORMULARIO CONDICIONAL SI ASISTE */}
+                  {formAsistentes[0]?.asiste === true && (
+                    <div className="space-y-5 animate-in slide-in-from-bottom-2 fade-in duration-300">
+                      
+                      {bloques?.rsvpForm?.askDietary && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Restricciones alimentarias</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ej. Vegetariano, sin gluten..." 
+                            value={formAsistentes[0]?.restricciones || ''}
+                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].restricciones = e.target.value; return n; })}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+                      )}
+
+                      {bloques?.rsvpForm?.askSong && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Sugerencia de Canción</label>
+                          <input 
+                            type="text" 
+                            placeholder="¿Qué canción te haría bailar?" 
+                            value={formAsistentes[0]?.cancionSugerida || ''}
+                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].cancionSugerida = e.target.value; return n; })}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Un mensaje para nosotros</label>
+                        <textarea 
+                          placeholder="Déjanos tus buenos deseos (Opcional)" 
+                          value={observaciones}
+                          onChange={(e) => setObservaciones(e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm min-h-[80px] focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BOTONES DE ACCIÓN FINAL */}
+                  <div className="pt-4 flex flex-col gap-3">
+                    <button 
+                      onClick={handleConfirmRSVP} 
+                      disabled={formAsistentes[0]?.asiste === undefined || formAsistentes[0]?.asiste === null}
+                      className="w-full py-4 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 hover:bg-zinc-800"
+                    >
+                      Enviar Respuesta
+                    </button>
+                    <button 
+                      onClick={() => setIsRsvpModalOpen(false)} 
+                      className="w-full py-3 bg-transparent text-zinc-400 rounded-xl text-xs font-bold transition-all hover:text-zinc-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
+                  <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
+                  <p className="text-sm font-medium text-zinc-500">Procesando tu respuesta...</p>
+                </div>
+              )}
            </div>
         </div>
       )}

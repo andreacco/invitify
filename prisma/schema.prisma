@@ -154,20 +154,23 @@ enum RsvpStatus {
 
 // El grupo o familia (quien recibe el enlace único)
 model InvitadoPrincipal {
-  id                String       @id @default(uuid())
+  id                String       @id @default(cuid())
   eventId           String
-  codigoAcceso      String       @unique // Token corto para la URL (ej: "mami-2504")
-  nombreFamilia     String       // Ej: "Familia Paternina Osorio" o "Sr. Juan Carlos"
-  pasesTotales      Int          // Cantidad de pases asignados
+  codigoAcceso      String       @unique
+  nombreFamilia     String
+  telefono          String?      // Para el link de WhatsApp
+  pasesTotales      Int          @default(1) // Por defecto 1 (Individual)
   statusRSVP        RsvpStatus   @default(PENDIENTE)
+  mensajeEnviado    Boolean      @default(false) // Rastreador de WhatsApp
+  invitadoDe        String?      // "NOVIA" o "NOVIO"
   fechaConfirmacion DateTime?
-  observaciones     String?      // Mensaje que los invitados dejan a los novios/anfitriones
-  telefono          String       // Guardado como string limpio de forma obligatoria
-  event             Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  asistentes        Asistente[]
-  paseDigital       PaseDigital?
+  observaciones     String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  asistentes  Asistente[]
+  paseDigital PaseDigital?
 }
 
 // Desglose individual de quién asiste realmente dentro del grupo

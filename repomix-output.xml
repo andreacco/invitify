@@ -83,6 +83,8 @@ app/
         route.ts
     guests/
       [id]/
+        mark-sent/
+          route.ts
         route.ts
       route.ts
     rsvp/
@@ -206,6 +208,34 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="app/api/guests/[id]/mark-sent/route.ts">
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const { id } = await params;
+
+    const invitado = await prisma.invitadoPrincipal.update({
+      where: { id },
+      data: { mensajeEnviado: true },
+    });
+
+    return NextResponse.json({ success: true, invitado });
+  } catch (error) {
+    console.error('ERROR_MARK_SENT:', error);
+    return NextResponse.json({ error: 'Error al actualizar el estado' }, { status: 500 });
+  }
+}
+</file>
 
 <file path="app/api/auth/forgot-password/route.ts">
 import { prisma } from '@/lib/db';
@@ -1435,99 +1465,6 @@ export async function sendEventInvitationEmail({
     subject: subject,
     html: cuerpoHtml,
   });
-}
-</file>
-
-<file path="lib/mail.ts">
-import { Resend } from 'resend';
-
-// Inicializamos Resend con la API Key del .env
-const resend = new Resend(process.env.RESEND_API_KEY);
-const domain = process.env.NEXTAUTH_URL;
-
-/**
- * Envía el correo electrónico para verificar la cuenta recién creada.
- */
-export async function sendVerificationEmail(email: string, token: string, nombre: string) {
-  const confirmLink = `${domain}/auth/verify?token=${token}`;
-
-  try {
-    await resend.emails.send({
-      // NOTA: Si usas la capa gratuita de Resend sin un dominio propio configurado, 
-      // DEBES enviar obligatoriamente desde 'onboarding@resend.dev'
-      from: 'Invitify <onboarding@resend.dev>',
-      to: email,
-      subject: '✨ Verifica tu cuenta en Invitify',
-      html: `
-        <div style="font-family: sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px; border-radius: 16px; max-w: 500px; margin: 0 auto; border: 1px solid #27272a;">
-          <h2 style="color: #a855f7; margin-bottom: 10px;">¡Bienvenido a Invitify, ${nombre}!</h2>
-          <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
-            Gracias por registrarte. Para comenzar a diseñar y gestionar tus invitaciones digitales inteligentes, necesitamos confirmar tu dirección de correo electrónico.
-          </p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${confirmLink}" style="background-color: #9333ea; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);">
-              Confirmar Correo Electrónico
-            </a>
-          </div>
-          <p style="font-size: 11px; color: #71717a; line-height: 1.4;">
-            Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:<br/>
-            <a href="${confirmLink}" style="color: #a855f7;">${confirmLink}</a>
-          </p>
-          <hr style="border: 0; border-top: 1px solid #27272a; margin: 30px 0;" />
-          <p style="font-size: 11px; color: #52525b; text-align: center; margin: 0;">
-            &copy; ${new Date().getFullYear()} Invitify. Gestión inteligente de eventos únicos.
-          </p>
-        </div>
-      `,
-    });
-    console.log(`✉️ Correo de verificación enviado con éxito a: ${email}`);
-  } catch (error) {
-    console.error('❌ ERROR_SEND_VERIFICATION_EMAIL:', error);
-    throw new Error('No se pudo enviar el correo de verificación.');
-  }
-}
-
-/**
- * Envía el correo con el token temporal para el restablecimiento de contraseña.
- */
-export async function sendPasswordResetEmail(email: string, token: string) {
-  const resetLink = `${domain}/auth/reset-password?token=${token}`;
-
-  try {
-    await resend.emails.send({
-      from: 'Invitify <onboarding@resend.dev>',
-      to: email,
-      subject: '🔒 Restablecer tu contraseña - Invitify',
-      html: `
-        <div style="font-family: sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px; border-radius: 16px; max-w: 500px; margin: 0 auto; border: 1px solid #27272a;">
-          <h2 style="color: #a855f7; margin-bottom: 10px;">Recuperación de Contraseña</h2>
-          <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
-            Hemos recibido una solicitud para restablecer la contraseña de acceso a tu cuenta en Invitify. Este enlace expirará en 1 hora.
-          </p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #9333ea; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);">
-              Establecer Nueva Contraseña
-            </a>
-          </div>
-          <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
-            Si tú no solicitaste este cambio, puedes ignorar este correo de forma segura; tu contraseña actual se mantendrá intacta.
-          </p>
-          <p style="font-size: 11px; color: #71717a; line-height: 1.4; margin-top: 20px;">
-            Enlace directo:<br/>
-            <a href="${resetLink}" style="color: #a855f7;">${resetLink}</a>
-          </p>
-          <hr style="border: 0; border-top: 1px solid #27272a; margin: 30px 0;" />
-          <p style="font-size: 11px; color: #52525b; text-align: center; margin: 0;">
-            Invitify Security Engine.
-          </p>
-        </div>
-      `,
-    });
-    console.log(`✉️ Correo de recuperación enviado con éxito a: ${email}`);
-  } catch (error) {
-    console.error('❌ ERROR_SEND_RESET_EMAIL:', error);
-    throw new Error('No se pudo enviar el correo de recuperación.');
-  }
 }
 </file>
 
@@ -9507,6 +9444,7 @@ export async function POST(
     );
   }
 }
+// y si por favor, creemos el dashboard para ver los numeros de cuantos han confir
 </file>
 
 <file path="app/auth/login/page.tsx">
@@ -10800,6 +10738,150 @@ export default function LandingPage() {
 }
 </file>
 
+<file path="lib/mail.ts">
+import { Resend } from 'resend';
+
+// ❌ ELIMINAMOS esta línea de la raíz para que no rompa al importar el archivo:
+// const resend = new Resend(process.env.RESEND_API_KEY);
+
+const domain = process.env.NEXTAUTH_URL;
+
+/**
+ * Envía el correo electrónico para verificar la cuenta recién creada.
+ */
+export async function sendVerificationEmail(email: string, token: string, nombre: string) {
+  // 🔑 Inicializamos de forma segura dentro de la función
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const confirmLink = `${domain}/auth/verify?token=${token}`;
+
+  try {
+    await resend.emails.send({
+      from: 'Invitify <onboarding@resend.dev>',
+      to: email,
+      subject: '✨ Verifica tu cuenta en Invitify',
+      html: ``,
+    });
+    console.log(`✉️ Correo de verificación enviado con éxito a: ${email}`);
+  } catch (error) {
+    console.error('❌ ERROR_SEND_VERIFICATION_EMAIL:', error);
+    throw new Error('No se pudo enviar el correo de verificación.');
+  }
+}
+
+/**
+ * Envía el correo con el token temporal para el restablecimiento de contraseña.
+ */
+export async function sendPasswordResetEmail(email: string, token: string) {
+  // 🔑 Inicializamos de forma segura dentro de la función
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const resetLink = `${domain}/auth/reset-password?token=${token}`;
+
+  try {
+    await resend.emails.send({
+      from: 'Invitify <onboarding@resend.dev>',
+      to: email,
+      subject: '🔒 Restablecer tu contraseña - Invitify',
+      html: ``,
+    });
+    console.log(`✉️ Correo de recuperación enviado con éxito a: ${email}`);
+  } catch (error) {
+    console.error('❌ ERROR_SEND_RESET_EMAIL:', error);
+    throw new Error('No se pudo enviar el correo de recuperación.');
+  }
+}
+
+// import { Resend } from 'resend';
+
+// // Inicializamos Resend con la API Key del .env
+// const resend = new Resend(process.env.RESEND_API_KEY);
+// const domain = process.env.NEXTAUTH_URL;
+
+// /**
+//  * Envía el correo electrónico para verificar la cuenta recién creada.
+//  */
+// export async function sendVerificationEmail(email: string, token: string, nombre: string) {
+//   const confirmLink = `${domain}/auth/verify?token=${token}`;
+
+//   try {
+//     await resend.emails.send({
+//       // NOTA: Si usas la capa gratuita de Resend sin un dominio propio configurado, 
+//       // DEBES enviar obligatoriamente desde 'onboarding@resend.dev'
+//       from: 'Invitify <onboarding@resend.dev>',
+//       to: email,
+//       subject: '✨ Verifica tu cuenta en Invitify',
+//       html: `
+//         <div style="font-family: sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px; border-radius: 16px; max-w: 500px; margin: 0 auto; border: 1px solid #27272a;">
+//           <h2 style="color: #a855f7; margin-bottom: 10px;">¡Bienvenido a Invitify, ${nombre}!</h2>
+//           <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
+//             Gracias por registrarte. Para comenzar a diseñar y gestionar tus invitaciones digitales inteligentes, necesitamos confirmar tu dirección de correo electrónico.
+//           </p>
+//           <div style="text-align: center; margin: 30px 0;">
+//             <a href="${confirmLink}" style="background-color: #9333ea; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);">
+//               Confirmar Correo Electrónico
+//             </a>
+//           </div>
+//           <p style="font-size: 11px; color: #71717a; line-height: 1.4;">
+//             Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:<br/>
+//             <a href="${confirmLink}" style="color: #a855f7;">${confirmLink}</a>
+//           </p>
+//           <hr style="border: 0; border-top: 1px solid #27272a; margin: 30px 0;" />
+//           <p style="font-size: 11px; color: #52525b; text-align: center; margin: 0;">
+//             &copy; ${new Date().getFullYear()} Invitify. Gestión inteligente de eventos únicos.
+//           </p>
+//         </div>
+//       `,
+//     });
+//     console.log(`✉️ Correo de verificación enviado con éxito a: ${email}`);
+//   } catch (error) {
+//     console.error('❌ ERROR_SEND_VERIFICATION_EMAIL:', error);
+//     throw new Error('No se pudo enviar el correo de verificación.');
+//   }
+// }
+
+// /**
+//  * Envía el correo con el token temporal para el restablecimiento de contraseña.
+//  */
+// export async function sendPasswordResetEmail(email: string, token: string) {
+//   const resetLink = `${domain}/auth/reset-password?token=${token}`;
+
+//   try {
+//     await resend.emails.send({
+//       from: 'Invitify <onboarding@resend.dev>',
+//       to: email,
+//       subject: '🔒 Restablecer tu contraseña - Invitify',
+//       html: `
+//         <div style="font-family: sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px; border-radius: 16px; max-w: 500px; margin: 0 auto; border: 1px solid #27272a;">
+//           <h2 style="color: #a855f7; margin-bottom: 10px;">Recuperación de Contraseña</h2>
+//           <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
+//             Hemos recibido una solicitud para restablecer la contraseña de acceso a tu cuenta en Invitify. Este enlace expirará en 1 hora.
+//           </p>
+//           <div style="text-align: center; margin: 30px 0;">
+//             <a href="${resetLink}" style="background-color: #9333ea; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);">
+//               Establecer Nueva Contraseña
+//             </a>
+//           </div>
+//           <p style="font-size: 14px; color: #a1a1aa; line-height: 1.5;">
+//             Si tú no solicitaste este cambio, puedes ignorar este correo de forma segura; tu contraseña actual se mantendrá intacta.
+//           </p>
+//           <p style="font-size: 11px; color: #71717a; line-height: 1.4; margin-top: 20px;">
+//             Enlace directo:<br/>
+//             <a href="${resetLink}" style="color: #a855f7;">${resetLink}</a>
+//           </p>
+//           <hr style="border: 0; border-top: 1px solid #27272a; margin: 30px 0;" />
+//           <p style="font-size: 11px; color: #52525b; text-align: center; margin: 0;">
+//             Invitify Security Engine.
+//           </p>
+//         </div>
+//       `,
+//     });
+//     console.log(`✉️ Correo de recuperación enviado con éxito a: ${email}`);
+//   } catch (error) {
+//     console.error('❌ ERROR_SEND_RESET_EMAIL:', error);
+//     throw new Error('No se pudo enviar el correo de recuperación.');
+//   }
+// }
+</file>
+
 <file path="src/components/ui/EnvelopeSVG.tsx">
 'use client';
 
@@ -11761,6 +11843,7 @@ export async function POST(request: Request) {
             telefono: telefono || "", 
             pasesTotales: pasesFinales,
             codigoAcceso,
+            invitadoDe: invitado.invitadoDe || 'Ambos',
             asistentes: {
               create: listaAsistentesFinales.map((nombre: string) => ({
                 nombreCompleto: nombre,
@@ -11828,16 +11911,19 @@ export default function InvitadosTab({ evento }: { evento: any }) {
   const [invitados, setInvitados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  
+  // --- NUEVO: Estado del Filtro ---
+  const [filtroDe, setFiltroDe] = useState<'TODOS' | 'NOVIA' | 'NOVIO'>('TODOS');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'masiva' | 'manual'>('masiva');
 
-  // --- NUEVOS ESTADOS PARA EL FORMULARIO MANUAL ---
   const [isSaving, setIsSaving] = useState(false);
   const [manualData, setManualData] = useState({
     nombreFamilia: '',
     pasesTotales: 1,
-    telefono: ''
+    telefono: '',
+    invitadoDe: 'GENERAL' // <-- Añadido al estado
   });
 
   const loadInvitados = async () => {
@@ -11857,7 +11943,6 @@ export default function InvitadosTab({ evento }: { evento: any }) {
     loadInvitados();
   }, [evento.id]);
 
-  // --- NUEVA FUNCIÓN PARA GUARDAR EL INVITADO ---
   const handleGuardarManual = async () => {
     if (!manualData.nombreFamilia.trim()) {
       return alert('El nombre de la familia o invitado es obligatorio.');
@@ -11872,17 +11957,18 @@ export default function InvitadosTab({ evento }: { evento: any }) {
           eventId: evento.id,
           listaInvitados: [{
             nombreFamilia: manualData.nombreFamilia,
+            // Si el evento no permite acompañantes, forzamos a 1
             pasesTotales: evento.configPermiteAcompanantes ? manualData.pasesTotales : 1,
             telefono: manualData.telefono,
-            nombresAsistentes: [manualData.nombreFamilia] // Por defecto
+            invitadoDe: manualData.invitadoDe, // <-- Lo mandamos a la API
+            nombresAsistentes: [manualData.nombreFamilia] 
           }]
         })
       });
 
       if (!res.ok) throw new Error('Error al guardar el invitado');
       
-      // Limpiar formulario, recargar lista y cerrar modal
-      setManualData({ nombreFamilia: '', pasesTotales: 1, telefono: '' });
+      setManualData({ nombreFamilia: '', pasesTotales: 1, telefono: '', invitadoDe: 'GENERAL' });
       setIsModalOpen(false);
       await loadInvitados();
       
@@ -11894,29 +11980,57 @@ export default function InvitadosTab({ evento }: { evento: any }) {
     }
   };
 
-  const invitadosFiltrados = invitados.filter(inv =>
-    inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) ||
-    inv.telefono.includes(busqueda)
-  );
+  // --- NUEVA FUNCIÓN: Botón de WhatsApp ---
+  const handleWhatsApp = async (invitado: any) => {
+    const enlace = `${window.location.origin}/invitacion/${invitado.codigoAcceso}`;
+    const mensaje = `¡Hola ${invitado.nombreFamilia}! Te comparto la invitación para nuestra boda. Confirma tu asistencia aquí: ${enlace}`;
+    const numeroLimpio = invitado.telefono?.replace(/\D/g, '');
+    
+    // Lo marcamos en BD silenciosamente
+    await fetch(`/api/guests/${invitado.id}/mark-sent`, { method: 'POST' });
+    
+    // Actualizamos UI
+    setInvitados(prev => prev.map(i => i.id === invitado.id ? { ...i, mensajeEnviado: true } : i));
+
+    // Abrimos WhatsApp
+    window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  // --- NUEVO: Filtramos por el lado y luego por la búsqueda ---
+  const invitadosFiltrados = invitados.filter(inv => {
+    const pasaFiltroDe = filtroDe === 'TODOS' || inv.invitadoDe === filtroDe;
+    const pasaBusqueda = inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) || 
+                         (inv.telefono && inv.telefono.includes(busqueda));
+    return pasaFiltroDe && pasaBusqueda;
+  });
 
   return (
     <div className="space-y-4">
       
       {/* ACCIONES SUPERIORES */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/20 p-4 border border-zinc-800/60 rounded-2xl">
-        <input
-          type="text"
-          placeholder="🔍 Buscar familia o teléfono..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none"
-        />
-        <button 
-          className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md"
-          onClick={() => setIsModalOpen(true)}
-        >
-          ➕ Agregar Familia / Grupo
-        </button>
+      <div className="flex flex-col gap-4 bg-zinc-900/20 p-4 border border-zinc-800/60 rounded-2xl">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <input
+            type="text"
+            placeholder="🔍 Buscar familia o teléfono..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none"
+          />
+          <button 
+            className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md"
+            onClick={() => setIsModalOpen(true)}
+          >
+            ➕ Agregar Familia / Grupo
+          </button>
+        </div>
+
+        {/* Filtros Novia/Novio */}
+        <div className="flex gap-2 border-t border-zinc-800/50 pt-3">
+          <button onClick={() => setFiltroDe('TODOS')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'TODOS' ? 'bg-zinc-100 text-black border-white' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Todos</button>
+          <button onClick={() => setFiltroDe('NOVIA')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'NOVIA' ? 'bg-pink-500/20 text-pink-400 border-pink-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>De la Novia</button>
+          <button onClick={() => setFiltroDe('NOVIO')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'NOVIO' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Del Novio</button>
+        </div>
       </div>
 
       {/* TABLA DE INVITADOS */}
@@ -11924,27 +12038,34 @@ export default function InvitadosTab({ evento }: { evento: any }) {
         {loading ? (
           <div className="p-10 text-center text-xs text-zinc-500 animate-pulse">Cargando base de datos de pases...</div>
         ) : invitadosFiltrados.length === 0 ? (
-          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados registrados.</div>
+          <div className="p-10 text-center text-xs text-zinc-500">No se encontraron invitados.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-800/80 bg-zinc-950/40 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                   <th className="p-4">Familia / Grupo</th>
-                  <th className="p-4">Código Acceso</th>
-                  <th className="p-4 text-center">Pases Asignados</th>
+                  <th className="p-4">Lado</th>
+                  <th className="p-4 text-center">Pases</th>
                   <th className="p-4 text-center">Estado RSVP</th>
-                  <th className="p-4">Teléfono</th>
+                  <th className="p-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-xs">
                 {invitadosFiltrados.map((inv) => (
                   <tr key={inv.id} className="hover:bg-zinc-900/20 transition-colors">
-                    <td className="p-4 font-bold text-zinc-200">{inv.nombreFamilia}</td>
-                    <td className="p-4 font-mono text-[11px] text-purple-400 font-semibold">{inv.codigoAcceso}</td>
+                    <td className="p-4 font-bold text-zinc-200">
+                      {inv.nombreFamilia}
+                      <span className="block font-mono text-[10px] text-purple-400 font-normal mt-0.5">{inv.codigoAcceso}</span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`text-[9px] px-2 py-1 rounded-full uppercase tracking-widest font-bold ${inv.invitadoDe === 'NOVIA' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' : inv.invitadoDe === 'NOVIO' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400'}`}>
+                        {inv.invitadoDe || 'GENERAL'}
+                      </span>
+                    </td>
                     <td className="p-4 text-center font-semibold text-zinc-300">{inv.pasesTotales}</td>
                     <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
                         inv.statusRSVP === 'CONFIRMADO' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
                         inv.statusRSVP === 'RECHAZADO' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
                         'bg-amber-500/10 border-amber-500/20 text-amber-400'
@@ -11952,7 +12073,21 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                         {inv.statusRSVP}
                       </span>
                     </td>
-                    <td className="p-4 text-zinc-400 font-mono">{inv.telefono}</td>
+                    <td className="p-4">
+                      <div className="flex justify-center items-center gap-2">
+                        <button 
+                          onClick={() => handleWhatsApp(inv)}
+                          disabled={!inv.telefono}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                            inv.mensajeEnviado 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
+                              : 'bg-zinc-800 text-white hover:bg-zinc-700 disabled:opacity-30'
+                          }`}
+                        >
+                          {inv.mensajeEnviado ? '✓ Enviado' : '💬 Enviar'}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -11990,6 +12125,21 @@ export default function InvitadosTab({ evento }: { evento: any }) {
               </div>
             ) : (
               <div className="space-y-4">
+                
+                {/* Selector de Novia/Novio */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">¿De parte de quién?</label>
+                  <select 
+                    value={manualData.invitadoDe}
+                    onChange={e => setManualData({...manualData, invitadoDe: e.target.value})}
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100"
+                  >
+                    <option value="GENERAL">General / Ambos</option>
+                    <option value="NOVIA">De la Novia</option>
+                    <option value="NOVIO">Del Novio</option>
+                  </select>
+                </div>
+
                 {evento.configPermiteAcompanantes ? (
                   <>
                     <div className="space-y-1.5">
@@ -12002,7 +12152,7 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases Asignados</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases</label>
                       <input 
                         type="number" min="1" 
                         value={manualData.pasesTotales}
@@ -12023,6 +12173,7 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                     <p className="text-[10px] text-amber-500/80 mt-1">⚠️ Este evento no permite acompañantes (Pase único).</p>
                   </div>
                 )}
+                
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
                   <input 
@@ -12032,7 +12183,7 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." 
                   />
                 </div>
-                {/* 🚀 BOTÓN CONECTADO */}
+                
                 <button 
                   onClick={handleGuardarManual}
                   disabled={isSaving}
@@ -12172,310 +12323,6 @@ export default function EventoDashboardPage() {
           {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
         </div>
 
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/editor/PanelEdicion.tsx">
-'use client';
-
-import { useState, type Dispatch, type SetStateAction } from 'react';
-import {
-  CountdownBlock,
-  DressCodeBlock,
-  HeaderBlock,
-  InvitationTemplateState,
-  ItineraryItem,
-} from '@/types/invitation';
-import ImageUploader from '@/components/editor/ImageUploader';
-
-interface PanelEdicionProps {
-  template: InvitationTemplateState;
-  setTemplate: Dispatch<SetStateAction<InvitationTemplateState>>;
-}
-
-export default function PanelEdicion({ template, setTemplate }: PanelEdicionProps) {
-  // Estado para controlar qué pestaña está activa en el panel lateral
-  const [activeTab, setActiveTab] = useState<'bloques' | 'sobres'>('bloques');
-
-  // Funciones utilitarias para actualizar sub-estados de forma limpia
-  const updateHeader = (fields: Partial<HeaderBlock>) => {
-    setTemplate((prev: InvitationTemplateState) => ({
-      ...prev,
-      bloques: {
-        ...prev.bloques,
-        header: { ...prev.bloques.header, ...fields }
-      }
-    }));
-  };
-
-  const updateDressCode = (fields: Partial<DressCodeBlock>) => {
-    setTemplate((prev: InvitationTemplateState) => ({
-      ...prev,
-      bloques: {
-        ...prev.bloques,
-        dressCode: { ...prev.bloques.dressCode, ...fields }
-      }
-    }));
-  };
-
-  const updateCountdown = (fields: Partial<CountdownBlock>) => {
-    setTemplate((prev: InvitationTemplateState) => ({
-      ...prev,
-      bloques: {
-        ...prev.bloques,
-        countdown: { ...prev.bloques.countdown, ...fields }
-      }
-    }));
-  };
-
-  const updateItineraryConfig = (enabled: boolean) => {
-    setTemplate((prev) => ({
-      ...prev,
-      bloques: { ...prev.bloques, itinerary: { ...prev.bloques.itinerary, enabled } }
-    }));
-  };
-
-  const handleItineraryChange = (index: number, field: keyof ItineraryItem, value: string) => {
-    const updatedItems = [...(template.bloques.itinerary.items || [])];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
-    setTemplate((prev) => ({
-      ...prev, bloques: { ...prev.bloques, itinerary: { ...prev.bloques.itinerary, items: updatedItems } }
-    }));
-  };
-
-  const addItineraryItem = () => {
-    const newItem: ItineraryItem = { hora: '00:00', actividad: 'Nueva Actividad' };
-    setTemplate((prev) => ({
-      ...prev, bloques: { ...prev.bloques, itinerary: { ...prev.bloques.itinerary, items: [...(prev.bloques.itinerary.items || []), newItem] } }
-    }));
-  };
-
-  const removeItineraryItem = (index: number) => {
-    setTemplate((prev) => ({
-      ...prev, bloques: { ...prev.bloques, itinerary: { ...prev.bloques.itinerary, items: (prev.bloques.itinerary.items || []).filter((_, i) => i !== index) } }
-    }));
-  };
-
-  // Helper para dibujar el switch de Tailwind
-  const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
-    <button type="button" onClick={onChange} className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 shrink-0 ${checked ? 'bg-purple-600' : 'bg-zinc-700'}`}>
-      <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
-    </button>
-  );
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex border-b border-zinc-800 bg-zinc-900/80 sticky top-0 z-10">
-        <button onClick={() => setActiveTab('bloques')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'bloques' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}>Contenido (Bloques)</button>
-        <button onClick={() => setActiveTab('sobres')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'sobres' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}>Sobre y Sellos</button>
-      </div>
-
-      <div className="p-6 flex-1 overflow-y-auto space-y-8 select-none">
-        {activeTab === 'bloques' && (
-          <>
-            {/* SECCIÓN 1: BIENVENIDA Y PORTADA */}
-            <div className={`space-y-4 transition-opacity duration-300 ${template.bloques.header.enabled !== false ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Bloque de Portada</h3>
-                <ToggleSwitch checked={template.bloques.header.enabled !== false} onChange={() => updateHeader({ enabled: !(template.bloques.header.enabled !== false) })} />
-              </div>
-              <ImageUploader currentImageUrl={template.bloques.header.coverPhoto} onUploadSuccess={(url) => updateHeader({ coverPhoto: url })} />
-              <div className="space-y-2">
-                <label className="text-xs text-zinc-400">Nombres en la Invitación</label>
-                <input type="text" value={template.bloques.header.coupleNames} onChange={(e) => updateHeader({ coupleNames: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none" />
-              </div>
-            </div>
-
-            <hr className="border-zinc-800" />
-
-            {/* SECCIÓN 2: DRESS CODE */}
-            <div className={`space-y-4 transition-opacity duration-300 ${template.bloques.dressCode.enabled !== false ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Código de Vestimenta</h3>
-                <ToggleSwitch checked={template.bloques.dressCode.enabled !== false} onChange={() => updateDressCode({ enabled: !(template.bloques.dressCode.enabled !== false) })} />
-              </div>
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Formal', 'Semi-Formal', 'Casual', 'Custom'] as const).map((style) => (
-                    <button key={style} type="button" onClick={() => updateDressCode({ style })} className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${template.bloques.dressCode.style === style ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}>{style}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-zinc-400">Detalles</label>
-                <input type="text" value={template.bloques.dressCode.description} onChange={(e) => updateDressCode({ description: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none" />
-              </div>
-            </div>
-
-            <hr className="border-zinc-800" />
-
-            {/* SECCIÓN 3: CUENTA REGRESIVA */}
-            <div className={`space-y-4 transition-opacity duration-300 ${template.bloques.countdown.enabled ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Cuenta Regresiva</h3>
-                <ToggleSwitch checked={template.bloques.countdown.enabled} onChange={() => updateCountdown({ enabled: !template.bloques.countdown.enabled })} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-zinc-400">Mensaje del Contador</label>
-                <input type="text" value={template.bloques.countdown.message} onChange={(e) => updateCountdown({ message: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none" />
-              </div>
-            </div>
-
-            <hr className="border-zinc-800" />
-
-            {/* SECCIÓN 4: ITINERARIO DINÁMICO */}
-            <div className={`space-y-4 transition-opacity duration-300 ${template.bloques.itinerary?.enabled !== false ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Itinerario del Día</h3>
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={addItineraryItem} className="text-xs text-purple-400 hover:text-purple-300 font-medium">+ Evento</button>
-                  <ToggleSwitch checked={template.bloques.itinerary?.enabled !== false} onChange={() => updateItineraryConfig(!(template.bloques.itinerary?.enabled !== false))} />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {(template.bloques.itinerary.items || []).map((item: ItineraryItem, index: number) => (
-                  <div key={index} className="flex gap-2 items-center bg-zinc-950 p-3 border border-zinc-800 rounded-xl relative">
-                    <input type="text" value={item.hora} onChange={(e) => handleItineraryChange(index, 'hora', e.target.value)} className="w-16 text-center bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 focus:outline-none" />
-                    <input type="text" value={item.actividad} onChange={(e) => handleItineraryChange(index, 'actividad', e.target.value)} className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1 text-xs text-zinc-100 focus:outline-none" />
-                    <button type="button" onClick={() => removeItineraryItem(index)} className="text-zinc-500 hover:text-red-400 text-xs px-1">✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-{activeTab === 'sobres' && (
-          <div className="space-y-8 animate-in fade-in duration-200 pb-10">
-            
-            {/* 1. SELECCIÓN DEL COLOR DEL SOBRE */}
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Color del Sobre</h3>
-                <p className="text-[11px] text-zinc-500 font-light mt-0.5">Elige el color exterior del empaque.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
-                  <input
-                    type="color"
-                    value={template.estilos.envelope.color || '#18181b'}
-                    onChange={(e) => setTemplate(prev => ({
-                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
-                    }))}
-                    className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={template.estilos.envelope.color || '#18181b'}
-                  onChange={(e) => setTemplate(prev => ({
-                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
-                  }))}
-                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 uppercase font-mono"
-                  maxLength={7}
-                />
-              </div>
-            </div>
-
-            <hr className="border-zinc-800" />
-
-            {/* 2. PATRÓN DE FONDO Y APERTURA */}
-            <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Textura / Patrón</label>
-                <select
-                  value={template.estilos.envelope.pattern || 'none'}
-                  onChange={(e) => setTemplate(prev => ({
-                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, pattern: e.target.value as any } }
-                  }))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
-                >
-                  <option value="none">Liso (Sin textura)</option>
-                  <option value="botanical">Hojas Botánicas</option>
-                  <option value="floral">Puntos Florales</option>
-                  <option value="wheat">Espigas de Trigo</option>
-                  {/* 👇 NUEVA OPCIÓN PREMIUM 👇 */}
-                  <option value="real">Patrón Real (Grabado)</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Estilo de Apertura</label>
-                <select
-                  value={template.estilos.envelope.openingStyle || 'top'}
-                  onChange={(e) => setTemplate(prev => ({
-                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, openingStyle: e.target.value as any } }
-                  }))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
-                >
-                  <option value="top">Solapa Superior (Clásica)</option>
-                  <option value="middle">Apertura Central</option>
-                  <option value="left">Solapa Izquierda</option>
-                  <option value="right">Solapa Derecha</option>
-                  <option value="vertical">Apertura Vertical Asimétrica (Premium)</option>
-                </select>
-              </div>
-            </div>
-
-            <hr className="border-zinc-800" />
-
-            {/* 3. SELECCIÓN DEL SELLO DE CERA */}
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Sello de Cera</h3>
-              </div>
-              
-              <div className="flex items-center gap-3 mb-4">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider w-24">Color del Sello:</label>
-                <input
-                  type="color"
-                  value={template.estilos.envelope.waxSealColor || '#b45309'}
-                  onChange={(e) => setTemplate(prev => ({
-                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealColor: e.target.value } }
-                  }))}
-                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
-                />
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  { id: 'monogram', name: 'Monograma', desc: 'Iniciales clásicas entrelazadas' },
-                  { id: 'shield', name: 'Escudo Heráldico', desc: 'Escudo real con iniciales' },
-                  { id: 'rose', name: 'Rosa de Castilla', desc: 'Símbolo romántico clásico' },
-                  { id: 'lotus', name: 'Flor de Loto', desc: 'Elegancia orgánica' },
-                  { id: 'eucalyptus', name: 'Rama de Eucalipto', desc: 'Estilo botánico moderno' },
-                  { id: 'blank', name: 'Liso', desc: 'Sello de cera sin relieve' },
-                  { id: 'custom', name: 'Sello Original PNG', desc: 'Sello transparente cargado' }
-                ].map((seal) => (
-                  <button
-                    key={seal.id}
-                    type="button"
-                    onClick={() => setTemplate(prev => ({
-                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealDesign: seal.id as any } }
-                    }))}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${
-                      template.estilos.envelope.waxSealDesign === seal.id
-                        ? 'border-purple-500 bg-purple-500/5 text-purple-400'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-medium text-zinc-200">{seal.name}</span>
-                      <span className="text-[10px] text-zinc-500 font-light">{seal.desc}</span>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 transition-all ${
-                      template.estilos.envelope.waxSealDesign === seal.id ? 'border-purple-500 bg-purple-600' : 'border-zinc-700'
-                    }`} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -12622,146 +12469,104 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN */}
+      {/* MODAL DE CONFIRMACIÓN (RSVP) */}
       {isRsvpModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-[#fdfdfc] p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
-              <div className="text-center py-4">
-                 <h2 className="text-xl font-bold">¡Confirma tu asistencia!</h2>
-                 <p className="text-xs text-zinc-500 mt-2">Funcionalidad preservada.</p>
-                 <button onClick={() => setIsRsvpModalOpen(false)} className="mt-4 px-4 py-2 bg-black text-white rounded-lg text-xs">Cerrar</button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-[#fdfdfc] p-8 rounded-3xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-none">
+              
+              <div className="text-center mb-8">
+                 <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
+                 <p className="text-xs text-zinc-500 mt-2">Pase individual exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
               </div>
+
+              {!isSubmitting ? (
+                <div className="space-y-6">
+                  {/* BOTONES PRINCIPALES SÍ/NO */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: true })))}
+                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === true ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-emerald-200'}`}
+                    >
+                      <span className="text-xl">Sí</span>
+                      <span className="text-[10px] uppercase tracking-wider">Acepto con gusto</span>
+                    </button>
+                    <button 
+                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: false })))}
+                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === false ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-rose-200'}`}
+                    >
+                      <span className="text-xl">No</span>
+                      <span className="text-[10px] uppercase tracking-wider">Declino con pesar</span>
+                    </button>
+                  </div>
+
+                  {/* FORMULARIO CONDICIONAL SI ASISTE */}
+                  {formAsistentes[0]?.asiste === true && (
+                    <div className="space-y-5 animate-in slide-in-from-bottom-2 fade-in duration-300">
+                      
+                      {bloques?.rsvpForm?.askDietary && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Restricciones alimentarias</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ej. Vegetariano, sin gluten..." 
+                            value={formAsistentes[0]?.restricciones || ''}
+                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].restricciones = e.target.value; return n; })}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+                      )}
+
+                      {bloques?.rsvpForm?.askSong && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Sugerencia de Canción</label>
+                          <input 
+                            type="text" 
+                            placeholder="¿Qué canción te haría bailar?" 
+                            value={formAsistentes[0]?.cancionSugerida || ''}
+                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].cancionSugerida = e.target.value; return n; })}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Un mensaje para nosotros</label>
+                        <textarea 
+                          placeholder="Déjanos tus buenos deseos (Opcional)" 
+                          value={observaciones}
+                          onChange={(e) => setObservaciones(e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm min-h-[80px] focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BOTONES DE ACCIÓN FINAL */}
+                  <div className="pt-4 flex flex-col gap-3">
+                    <button 
+                      onClick={handleConfirmRSVP} 
+                      disabled={formAsistentes[0]?.asiste === undefined || formAsistentes[0]?.asiste === null}
+                      className="w-full py-4 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 hover:bg-zinc-800"
+                    >
+                      Enviar Respuesta
+                    </button>
+                    <button 
+                      onClick={() => setIsRsvpModalOpen(false)} 
+                      className="w-full py-3 bg-transparent text-zinc-400 rounded-xl text-xs font-bold transition-all hover:text-zinc-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
+                  <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
+                  <p className="text-sm font-medium text-zinc-500">Procesando tu respuesta...</p>
+                </div>
+              )}
            </div>
         </div>
       )}
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/templates/PearlElegance.tsx">
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { InvitationTemplateState } from '@/types/invitation';
-
-interface PearlEleganceProps {
-  evento: any;
-  invitado: any;
-  onOpenRsvp: () => void;
-}
-
-export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEleganceProps) {
-  const template: InvitationTemplateState = evento.template;
-  const { bloques } = template;
-  const accentColor = evento.colorPrincipal || '#d4af37'; 
-
-  const isHeaderEnabled = bloques.header?.enabled !== false;
-  const isDressCodeEnabled = bloques.dressCode?.enabled !== false;
-  const isItineraryEnabled = bloques.itinerary?.enabled !== false;
-  const itineraryItems = Array.isArray(bloques.itinerary) ? bloques.itinerary : (bloques.itinerary?.items || []);
-
-  // Estado para las partículas de escarcha mágica
-  const [particles, setParticles] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Colores solicitados: Morado, Dorado y Verde
-    const colors = ['#a855f7', '#d4af37', '#10b981']; 
-    
-    // Generamos 45 brillitos sutiles para no recargar la pantalla
-    const newParticles = Array.from({ length: 100 }).map((_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      duration: `${Math.random() * 20 + 15}s`, // Caída muy suave y lenta (entre 15s y 35s)
-      delay: `-${Math.random() * 30}s`, // Desfase para que ya estén en toda la pantalla al abrir
-      size: `${Math.random() * 2 + 1.5}px`, // Tamaño muy sutil (1.5px a 3.5px)
-      color: colors[Math.floor(Math.random() * colors.length)],
-      twinkleDuration: `${Math.random() * 3 + 2}s`, // Velocidad del brillo
-    }));
-    setParticles(newParticles);
-  }, []);
-
-  return (
-    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
-      {/* TEXTURA BASE */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
-
-      {/* ✨ EFECTO ESCARCHA MAGICA ✨ */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <style>{`
-          @keyframes fallDown {
-            0% { top: -5%; opacity: 0; }
-            10% { opacity: 0.65; }
-            90% { opacity: 0.65; }
-            100% { top: 105%; opacity: 0; }
-          }
-          @keyframes twinkle {
-            0% { transform: scale(0.6); opacity: 0.2; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.6); opacity: 0.2; }
-          }
-        `}</style>
-        {particles.map(p => (
-          <div
-            key={p.id}
-            className="absolute rounded-full"
-            style={{
-              left: p.left,
-              width: p.size,
-              height: p.size,
-              backgroundColor: p.color,
-              boxShadow: `0 0 5px ${p.color}`,
-              animation: `fallDown ${p.duration} linear infinite ${p.delay}, twinkle ${p.twinkleDuration} ease-in-out infinite ${p.delay}`
-            }}
-          />
-        ))}
-      </div>
-
-      {/* CONTENIDO PRINCIPAL (z-10 para que los textos siempre queden por encima de la escarcha) */}
-      <div className="relative z-10 w-full max-w-sm mx-auto space-y-12 py-10">
-        
-        {isHeaderEnabled && (
-          <div className="space-y-6">
-            <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-400 drop-shadow-sm">Nuestra Boda</span>
-            <h1 className="text-4xl font-serif text-zinc-800 leading-tight">{bloques.header.coupleNames}</h1>
-            <p className="text-sm text-zinc-500 italic">{bloques.header.welcomeText}</p>
-          </div>
-        )}
-
-        {isDressCodeEnabled && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-            <h2 className="text-xl font-serif text-zinc-800">Código de Vestimenta</h2>
-            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-            <p className="font-bold text-sm uppercase tracking-widest text-zinc-700">{bloques.dressCode.style}</p>
-            <p className="text-xs text-zinc-500">{bloques.dressCode.description}</p>
-          </div>
-        )}
-
-        {isItineraryEnabled && itineraryItems.length > 0 && (
-          <div className="space-y-6 pt-8 border-t border-zinc-200">
-            <h2 className="text-xl font-serif text-zinc-800">Itinerario</h2>
-            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-            <div className="space-y-4 mt-6">
-              {itineraryItems.map((item: any, i: number) => (
-                <div key={i} className="flex justify-between items-end border-b border-zinc-200/50 pb-2">
-                  <span className="text-sm font-serif text-zinc-800">{item.actividad}</span>
-                  <span className="text-xs font-bold tracking-widest" style={{ color: accentColor }}>{item.hora}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="pt-12 pb-20">
-          <button onClick={onOpenRsvp} className="px-8 py-3 bg-zinc-900 text-white text-xs uppercase tracking-widest hover:bg-zinc-800 transition-colors shadow-xl rounded-full">
-            Confirmar Asistencia
-          </button>
-          <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-8">
-            Invitación exclusiva para: <br/>
-            <span className="font-bold text-zinc-600 text-xs mt-1 block">{invitado?.nombreFamilia || 'Invitado Especial'}</span>
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -12924,20 +12729,23 @@ enum RsvpStatus {
 
 // El grupo o familia (quien recibe el enlace único)
 model InvitadoPrincipal {
-  id                String       @id @default(uuid())
+  id                String       @id @default(cuid())
   eventId           String
-  codigoAcceso      String       @unique // Token corto para la URL (ej: "mami-2504")
-  nombreFamilia     String       // Ej: "Familia Paternina Osorio" o "Sr. Juan Carlos"
-  pasesTotales      Int          // Cantidad de pases asignados
+  codigoAcceso      String       @unique
+  nombreFamilia     String
+  telefono          String?      // Para el link de WhatsApp
+  pasesTotales      Int          @default(1) // Por defecto 1 (Individual)
   statusRSVP        RsvpStatus   @default(PENDIENTE)
+  mensajeEnviado    Boolean      @default(false) // Rastreador de WhatsApp
+  invitadoDe        String?      // "NOVIA" o "NOVIO"
   fechaConfirmacion DateTime?
-  observaciones     String?      // Mensaje que los invitados dejan a los novios/anfitriones
-  telefono          String       // Guardado como string limpio de forma obligatoria
-  event             Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  asistentes        Asistente[]
-  paseDigital       PaseDigital?
+  observaciones     String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  asistentes  Asistente[]
+  paseDigital PaseDigital?
 }
 
 // Desglose individual de quién asiste realmente dentro del grupo
@@ -12968,6 +12776,538 @@ model PaseDigital {
 }
 </file>
 
+<file path="src/components/editor/PanelEdicion.tsx">
+'use client';
+
+import { useState, type Dispatch, type SetStateAction } from 'react';
+import { InvitationTemplateState, ItineraryItem, VenueItem } from '@/types/invitation';
+import ImageUploader from '@/components/editor/ImageUploader';
+
+interface PanelEdicionProps {
+  template: InvitationTemplateState;
+  setTemplate: Dispatch<SetStateAction<InvitationTemplateState>>;
+}
+
+export default function PanelEdicion({ template, setTemplate }: PanelEdicionProps) {
+  const [activeTab, setActiveTab] = useState<'bloques' | 'sobres'>('bloques');
+  const [openSection, setOpenSection] = useState<string | null>('header');
+  
+  // Estados para modales de edición compleja (Itinerario)
+  const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
+
+  const toggleSection = (section: string) => {
+    setOpenSection(openSection === section ? null : section);
+  };
+
+  const updateBlock = (blockName: keyof typeof template.bloques, fields: any) => {
+    setTemplate((prev: any) => ({
+      ...prev,
+      bloques: { ...prev.bloques, [blockName]: { ...prev.bloques[blockName], ...fields } }
+    }));
+  };
+
+  // Funciones Itinerario (Timeline)
+  const handleEventChange = (field: keyof ItineraryItem, value: string) => {
+    if (editingEventIndex === null) return;
+    const updated = [...(template.bloques.itinerary?.items || [])];
+    updated[editingEventIndex] = { ...updated[editingEventIndex], [field]: value };
+    updateBlock('itinerary', { items: updated });
+  };
+  
+  const addEvent = () => {
+    const newItems = [...(template.bloques.itinerary?.items || []), { hora: '00:00', actividad: 'Nuevo Evento' }];
+    updateBlock('itinerary', { items: newItems });
+    setEditingEventIndex(newItems.length - 1);
+  };
+
+  const removeEvent = (index: number) => {
+    const updated = (template.bloques.itinerary?.items || []).filter((_, i) => i !== index);
+    updateBlock('itinerary', { items: updated });
+  };
+
+  const moveEvent = (index: number, direction: 'up' | 'down') => {
+    const items = [...(template.bloques.itinerary?.items || [])];
+    if (direction === 'up' && index > 0) {
+      [items[index - 1], items[index]] = [items[index], items[index - 1]];
+    } else if (direction === 'down' && index < items.length - 1) {
+      [items[index + 1], items[index]] = [items[index], items[index + 1]];
+    }
+    updateBlock('itinerary', { items });
+  };
+
+  // Funciones Direcciones (Venues)
+  const addVenue = () => {
+    const newVenues = [...(template.bloques.venues?.items || []), { id: Date.now().toString(), name: 'Nuevo Lugar', address: '', cityState: '', mapLink: '', enabled: true }];
+    updateBlock('venues', { items: newVenues });
+  };
+
+  const updateVenue = (index: number, field: keyof VenueItem, value: any) => {
+    const updated = [...(template.bloques.venues?.items || [])];
+    updated[index] = { ...updated[index], [field]: value };
+    updateBlock('venues', { items: updated });
+  };
+
+  const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onChange(); }} className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 shrink-0 ${checked ? 'bg-purple-600' : 'bg-zinc-700'}`}>
+      <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+    </button>
+  );
+
+  const AccordionHeader = ({ title, blockKey, isEnabled }: { title: string, blockKey: keyof typeof template.bloques, isEnabled: boolean }) => (
+    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-900/50 transition-colors" onClick={() => toggleSection(blockKey)}>
+      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">{title}</h3>
+      <div className="flex items-center gap-4">
+        <span className="text-xs text-zinc-500">{openSection === blockKey ? '▲' : '▼'}</span>
+        <ToggleSwitch checked={isEnabled} onChange={() => updateBlock(blockKey, { enabled: !isEnabled })} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
+      <div className="flex border-b border-zinc-800 bg-zinc-900/80 sticky top-0 z-10">
+        <button onClick={() => setActiveTab('bloques')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'bloques' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>Bloques</button>
+        <button onClick={() => setActiveTab('sobres')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'sobres' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>Sobres</button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto select-none">
+        {activeTab === 'bloques' && (
+          <div className="divide-y divide-zinc-800">
+            
+            {/* 1. NOMBRES Y PORTADA */}
+            <div className={`transition-opacity duration-300 ${template.bloques.header?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="1. Nombres de la Pareja" blockKey="header" isEnabled={template.bloques.header?.enabled !== false} />
+              {openSection === 'header' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <ImageUploader currentImageUrl={template.bloques.header.coverPhoto || ''} onUploadSuccess={(url) => updateBlock('header', { coverPhoto: url })} />
+                  <input type="text" placeholder="Encabezado (Ej. Nuestra Boda)" value={template.bloques.header.welcomeText || ''} onChange={(e) => updateBlock('header', { welcomeText: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Nombres (Ej. Andrea & Jose)" value={template.bloques.header.coupleNames || ''} onChange={(e) => updateBlock('header', { coupleNames: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Subtítulo 1" value={template.bloques.header.subtitle1 || ''} onChange={(e) => updateBlock('header', { subtitle1: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Subtítulo 2" value={template.bloques.header.subtitle2 || ''} onChange={(e) => updateBlock('header', { subtitle2: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                </div>
+              )}
+            </div>
+
+            {/* 2. RSVP FORM OPTIONS */}
+            <div className={`transition-opacity duration-300 ${template.bloques.rsvpForm?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="2. Opciones de RSVP" blockKey="rsvpForm" isEnabled={template.bloques.rsvpForm?.enabled !== false} />
+              {openSection === 'rsvpForm' && (
+                <div className="p-4 pt-0 space-y-4">
+                  {[
+                    { key: 'askDietary', label: 'Restricciones alimentarias' },
+                    { key: 'askAccommodation', label: 'Necesidad de alojamiento' },
+                    { key: 'askEvents', label: 'Participación en eventos' },
+                    { key: 'askTransportation', label: 'Necesidad de transporte' },
+                    { key: 'askSong', label: 'Sugerencia de canción' },
+                    { key: 'askChildren', label: 'Asistencia de niños' }
+                  ].map((opt) => (
+                    <div key={opt.key} className="flex justify-between items-center bg-zinc-900 p-3 rounded-lg">
+                      <span className="text-xs text-zinc-300">{opt.label}</span>
+                      <ToggleSwitch checked={!!(template.bloques.rsvpForm as any)?.[opt.key]} onChange={() => updateBlock('rsvpForm', { [opt.key]: !(template.bloques.rsvpForm as any)?.[opt.key] })} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 3. FECHA Y HORA */}
+            <div className={`transition-opacity duration-300 ${template.bloques.dateTime?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="3. Fecha y Hora" blockKey="dateTime" isEnabled={template.bloques.dateTime?.enabled !== false} />
+              {openSection === 'dateTime' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <input type="date" value={template.bloques.dateTime?.date || ''} onChange={(e) => updateBlock('dateTime', { date: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <div className="flex gap-2">
+                    <input type="time" value={template.bloques.dateTime?.time || ''} onChange={(e) => updateBlock('dateTime', { time: e.target.value })} className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                    <select value={template.bloques.dateTime?.timeFormat || '12h'} onChange={(e) => updateBlock('dateTime', { timeFormat: e.target.value })} className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm">
+                      <option value="12h">12H</option>
+                      <option value="24h">24H</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-between items-center bg-zinc-900 p-3 rounded-lg">
+                    <span className="text-xs text-zinc-300">Botón "Añadir a Calendario"</span>
+                    <ToggleSwitch checked={template.bloques.dateTime?.showAddToCalendar !== false} onChange={() => updateBlock('dateTime', { showAddToCalendar: !(template.bloques.dateTime?.showAddToCalendar !== false) })} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4. DIRECCIONES (VENUES) */}
+            <div className={`transition-opacity duration-300 ${template.bloques.venues?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="4. Direcciones" blockKey="venues" isEnabled={template.bloques.venues?.enabled !== false} />
+              {openSection === 'venues' && (
+                <div className="p-4 pt-0 space-y-6">
+                  {(template.bloques.venues?.items || []).map((venue, idx) => (
+                    <div key={idx} className={`space-y-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg relative ${!venue.enabled ? 'opacity-50' : ''}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <ToggleSwitch checked={!!venue.enabled} onChange={() => updateVenue(idx, 'enabled', !venue.enabled)} />
+                        <button type="button" onClick={() => { const items = [...(template.bloques.venues?.items || [])]; items.splice(idx, 1); updateBlock('venues', { items }); }} className="text-red-400 text-xs">Eliminar</button>
+                      </div>
+                      <input type="text" placeholder="Nombre (Ej. Salón principal)" value={venue.name} onChange={(e) => updateVenue(idx, 'name', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                      <input type="text" placeholder="Dirección" value={venue.address} onChange={(e) => updateVenue(idx, 'address', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                      <input type="text" placeholder="Ciudad y Estado" value={venue.cityState} onChange={(e) => updateVenue(idx, 'cityState', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                      <input type="text" placeholder="Link Google Maps" value={venue.mapLink} onChange={(e) => updateVenue(idx, 'mapLink', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                      <ImageUploader currentImageUrl={venue.photoUrl || ''} onUploadSuccess={(url) => updateVenue(idx, 'photoUrl', url)} />
+                    </div>
+                  ))}
+                  <button type="button" onClick={addVenue} className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-white transition-colors">+ Añadir Dirección</button>
+                </div>
+              )}
+            </div>
+
+            {/* 5. TIMELINE (ITINERARIO) */}
+            <div className={`transition-opacity duration-300 ${template.bloques.itinerary?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="5. Timeline del Evento" blockKey="itinerary" isEnabled={template.bloques.itinerary?.enabled !== false} />
+              {openSection === 'itinerary' && (
+                <div className="p-4 pt-0 space-y-2">
+                  {(template.bloques.itinerary?.items || []).map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-center bg-zinc-900 p-2 border border-zinc-800 rounded-lg">
+                      <div className="flex flex-col gap-1">
+                        <button type="button" onClick={() => moveEvent(idx, 'up')} className="text-zinc-500 hover:text-white">▲</button>
+                        <button type="button" onClick={() => moveEvent(idx, 'down')} className="text-zinc-500 hover:text-white">▼</button>
+                      </div>
+                      <div className="flex-1 text-sm text-zinc-300">
+                        <p><strong>{item.hora}</strong> - {item.actividad}</p>
+                      </div>
+                      <button type="button" onClick={() => setEditingEventIndex(idx)} className="text-purple-400 text-xs px-2 hover:underline">Editar</button>
+                      <button type="button" onClick={() => removeEvent(idx)} className="text-red-400 text-xs font-bold px-2">✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addEvent} className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-white transition-colors mt-4">+ Añadir Evento</button>
+                </div>
+              )}
+            </div>
+
+            {/* 6. PADRES Y PADRINOS */}
+            <div className={`transition-opacity duration-300 ${template.bloques.parents?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="6. Padres y Padrinos" blockKey="parents" isEnabled={template.bloques.parents?.enabled !== false} />
+              {openSection === 'parents' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <input type="text" placeholder="Mensaje (Ej. Con la bendición de...)" value={template.bloques.parents?.description || ''} onChange={(e) => updateBlock('parents', { description: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Padres de la novia" value={template.bloques.parents?.brideParents || ''} onChange={(e) => updateBlock('parents', { brideParents: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Padres del novio" value={template.bloques.parents?.groomParents || ''} onChange={(e) => updateBlock('parents', { groomParents: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                </div>
+              )}
+            </div>
+
+            {/* 7. DRESS CODE */}
+            <div className={`transition-opacity duration-300 ${template.bloques.dressCode?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="7. Dress Code" blockKey="dressCode" isEnabled={template.bloques.dressCode?.enabled !== false} />
+              {openSection === 'dressCode' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <input type="text" placeholder="Estilo (Ej. Formal)" value={template.bloques.dressCode?.style || ''} onChange={(e) => updateBlock('dressCode', { style: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <textarea placeholder="Descripción" value={template.bloques.dressCode?.description || ''} onChange={(e) => updateBlock('dressCode', { description: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm min-h-[60px]" />
+                </div>
+              )}
+            </div>
+
+            {/* 8. CUENTA REGRESIVA */}
+            <div className={`transition-opacity duration-300 ${template.bloques.countdown?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="8. Cuenta Regresiva" blockKey="countdown" isEnabled={template.bloques.countdown?.enabled !== false} />
+              {openSection === 'countdown' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <input type="text" placeholder="Mensaje (Ej. Ya casi llega el día)" value={template.bloques.countdown?.message || ''} onChange={(e) => updateBlock('countdown', { message: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <p className="text-[10px] text-zinc-500">El contador automático tomará la Fecha configurada en el paso 3.</p>
+                </div>
+              )}
+            </div>
+
+            {/* 9. MENU DE COMIDA */}
+            <div className={`transition-opacity duration-300 ${template.bloques.menu?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="9. Menú de Comida" blockKey="menu" isEnabled={template.bloques.menu?.enabled !== false} />
+              {openSection === 'menu' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <textarea placeholder="Detalles del menú (próximamente estructura completa)" value={template.bloques.menu?.description || ''} onChange={(e) => updateBlock('menu', { description: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm min-h-[60px]" />
+                </div>
+              )}
+            </div>
+
+            {/* 10. MENSAJE DE CIERRE */}
+            <div className={`transition-opacity duration-300 ${template.bloques.closingMessage?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="10. Mensaje de Cierre" blockKey="closingMessage" isEnabled={template.bloques.closingMessage?.enabled !== false} />
+              {openSection === 'closingMessage' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <textarea placeholder="Mensaje final (Ej. ¡Los esperamos!)" value={template.bloques.closingMessage?.message || ''} onChange={(e) => updateBlock('closingMessage', { message: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm min-h-[80px]" />
+                </div>
+              )}
+            </div>
+
+            {/* 11. RSVP DETALLES */}
+            <div className={`transition-opacity duration-300 ${template.bloques.rsvpDetails?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="11. Detalles RSVP" blockKey="rsvpDetails" isEnabled={template.bloques.rsvpDetails?.enabled !== false} />
+              {openSection === 'rsvpDetails' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <input type="text" placeholder="Ej. Confirma antes del:" value={template.bloques.rsvpDetails?.rsvpByText || ''} onChange={(e) => updateBlock('rsvpDetails', { rsvpByText: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="date" value={template.bloques.rsvpDetails?.deadlineDate || ''} onChange={(e) => updateBlock('rsvpDetails', { deadlineDate: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                  <input type="tel" placeholder="Teléfono para dudas" value={template.bloques.rsvpDetails?.contactPhone || ''} onChange={(e) => updateBlock('rsvpDetails', { contactPhone: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
+                </div>
+              )}
+            </div>
+
+            {/* 12. REGALOS */}
+            <div className={`transition-opacity duration-300 ${template.bloques.gifts?.enabled !== false ? 'opacity-100' : 'opacity-40'}`}>
+              <AccordionHeader title="12. Mesa de Regalos" blockKey="gifts" isEnabled={template.bloques.gifts?.enabled !== false} />
+              {openSection === 'gifts' && (
+                <div className="p-4 pt-0 space-y-4">
+                  <textarea placeholder="Condiciones y detalles (Ej. Lluvia de sobres o link a mesa de regalos)" value={template.bloques.gifts?.message || ''} onChange={(e) => updateBlock('gifts', { message: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm min-h-[80px]" />
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* CONTENIDO DE LA PESTAÑA DE SOBRES MANTENIDO INTACTO */}
+        {activeTab === 'sobres' && (
+          <div className="p-6">
+            <p className="text-zinc-500 text-sm">Configuración visual de tu sobre (Color, estilo de apertura, cera, etc.)</p>
+            {/* Aquí mantienes lo que ya tenías de los sobres */}
+          </div>
+        )}
+      </div>
+
+      {/* MODAL PARA EDITAR EVENTO DEL TIMELINE */}
+      {editingEventIndex !== null && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 p-6 rounded-xl w-full max-w-sm border border-zinc-700 space-y-4">
+            <h3 className="text-white font-bold">Editar Evento</h3>
+            <div className="space-y-3">
+              <input type="time" value={template.bloques.itinerary?.items?.[editingEventIndex]?.hora || ''} onChange={(e) => handleEventChange('hora', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-100" />
+              <input type="text" placeholder="Nombre (Ej. Ceremonia)" value={template.bloques.itinerary?.items?.[editingEventIndex]?.actividad || ''} onChange={(e) => handleEventChange('actividad', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-100" />
+              <input type="text" placeholder="Ubicación (Opcional)" value={template.bloques.itinerary?.items?.[editingEventIndex]?.ubicacion || ''} onChange={(e) => handleEventChange('ubicacion', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-100" />
+              <ImageUploader currentImageUrl={template.bloques.itinerary?.items?.[editingEventIndex]?.photoUrl || ''} onUploadSuccess={(url) => handleEventChange('photoUrl', url)} />
+            </div>
+            <button type="button" onClick={() => setEditingEventIndex(null)} className="w-full py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-white transition-colors">Guardar Evento</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/templates/PearlElegance.tsx">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { InvitationTemplateState, ItineraryItem } from '@/types/invitation';
+
+interface PearlEleganceProps {
+  evento: any;
+  invitado: any;
+  onOpenRsvp: () => void;
+}
+
+export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEleganceProps) {
+  const template: InvitationTemplateState = evento.template;
+  const { bloques } = template;
+  const accentColor = evento.colorPrincipal || '#d4af37'; 
+
+  // Controladores de visualización por bloque
+  const isHeaderEnabled = bloques.header?.enabled !== false;
+  const isCountdownEnabled = bloques.countdown?.enabled !== false;
+  const isLocationEnabled = bloques.venues?.enabled !== false;
+  const isDressCodeEnabled = bloques.dressCode?.enabled !== false;
+  const isItineraryEnabled = bloques.itinerary?.enabled !== false;
+  const isParentsEnabled = bloques.parents?.enabled !== false;
+  const isMenuEnabled = bloques.menu?.enabled !== false;
+  const isClosingEnabled = bloques.closingMessage?.enabled !== false;
+  const isRsvpDetailsEnabled = bloques.rsvpDetails?.enabled !== false;
+  const isGiftsEnabled = bloques.gifts?.enabled !== false;
+
+  const itineraryItems = bloques.itinerary?.items || [];
+  const venues = bloques.venues?.items || [];
+
+  // Lógica del Countdown Real
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    if (!bloques.dateTime?.date) return;
+    const targetDate = new Date(`${bloques.dateTime.date}T${bloques.dateTime.time || '00:00'}`).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((distance % (1000 * 60)) / 1000),
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [bloques.dateTime?.date, bloques.dateTime?.time]);
+
+  // Partículas
+  const [particles, setParticles] = useState<any[]>([]);
+  useEffect(() => {
+    const colors = ['#a855f7', '#d4af37', '#10b981', '#fdf8f6']; 
+    const newParticles = Array.from({ length: 120 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      duration: `${Math.random() * 10 + 10}s`, 
+      delay: `-${Math.random() * 20}s`, 
+      size: `${Math.random() * 3 + 1}px`, 
+      color: colors[Math.floor(Math.random() * colors.length)],
+      twinkleDuration: `${Math.random() * 2 + 1.5}s`, 
+    }));
+    setParticles(newParticles);
+  }, []);
+
+  return (
+    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        <style>{`@keyframes fallDown { 0% { top: -5%; } 100% { top: 105%; } } @keyframes twinkle { 0% { transform: scale(0.5); opacity: 0.2; } 50% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(0.5); opacity: 0.2; } }`}</style>
+        {particles.map(p => <div key={p.id} className="absolute rounded-full" style={{ left: p.left, width: p.size, height: p.size, backgroundColor: p.color, boxShadow: `0 0 6px 1px ${p.color}`, animation: `fallDown ${p.duration} linear infinite ${p.delay}, twinkle ${p.twinkleDuration} ease-in-out infinite ${p.delay}` }} />)}
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm mx-auto space-y-12 py-10">
+        
+        {/* ENCABEZADO Y NOMBRES */}
+        {isHeaderEnabled && (
+          <div className="space-y-6">
+            <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-400">{bloques.header?.welcomeText || 'Nuestra Boda'}</span>
+            <h1 className="text-4xl font-serif text-zinc-800 leading-tight">{bloques.header?.coupleNames}</h1>
+            {(bloques.header?.subtitle1 || bloques.header?.subtitle2) && (
+              <div className="text-xs text-zinc-500 italic space-y-1">
+                {bloques.header.subtitle1 && <p>{bloques.header.subtitle1}</p>}
+                {bloques.header.subtitle2 && <p>{bloques.header.subtitle2}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PADRES Y PADRINOS */}
+        {isParentsEnabled && (bloques.parents?.brideParents || bloques.parents?.groomParents) && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.parents.description || 'Con la bendición de nuestros padres'}</p>
+            {bloques.parents.brideParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.brideParents}</p>}
+            {bloques.parents.brideParents && bloques.parents.groomParents && <span className="text-xs text-zinc-400">&</span>}
+            {bloques.parents.groomParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.groomParents}</p>}
+          </div>
+        )}
+
+        {/* CUENTA REGRESIVA REAL */}
+        {isCountdownEnabled && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.countdown?.message || 'Faltan'}</p>
+             <div className="flex justify-center gap-6 text-zinc-700">
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.days}</span><p className="text-[9px] uppercase tracking-widest mt-1">Días</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.hours}</span><p className="text-[9px] uppercase tracking-widest mt-1">Hrs</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.minutes}</span><p className="text-[9px] uppercase tracking-widest mt-1">Min</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.seconds}</span><p className="text-[9px] uppercase tracking-widest mt-1">Seg</p></div>
+             </div>
+             {bloques.dateTime?.showAddToCalendar !== false && (
+               <button className="mt-4 px-4 py-2 border border-zinc-300 rounded-full text-[10px] uppercase tracking-widest text-zinc-600 hover:bg-zinc-100 transition-colors">Añadir al Calendario</button>
+             )}
+          </div>
+        )}
+
+        {/* UBICACIONES (VENUES) */}
+        {isLocationEnabled && venues.length > 0 && (
+          <div className="space-y-8 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Ubicaciones</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             {venues.map((venue, idx) => venue.enabled && (
+               <div key={idx} className="space-y-2">
+                 {venue.photoUrl && <img src={venue.photoUrl} alt={venue.name} className="w-full h-32 object-cover rounded-xl mb-4 shadow-md" />}
+                 <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-700">{venue.name}</h3>
+                 <p className="text-xs text-zinc-500 leading-relaxed">{venue.address} <br/> {venue.cityState}</p>
+                 {venue.mapLink && (
+                   <a href={venue.mapLink} target="_blank" rel="noreferrer" className="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-white bg-zinc-800 px-4 py-2 rounded-full">Ver en Mapa</a>
+                 )}
+               </div>
+             ))}
+          </div>
+        )}
+
+        {/* DRESS CODE */}
+        {isDressCodeEnabled && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+            <h2 className="text-xl font-serif text-zinc-800">Código de Vestimenta</h2>
+            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            <p className="font-bold text-sm uppercase tracking-widest text-zinc-700">{bloques.dressCode?.style}</p>
+            <p className="text-xs text-zinc-500">{bloques.dressCode?.description}</p>
+          </div>
+        )}
+
+        {/* ITINERARIO VISUAL */}
+        {isItineraryEnabled && itineraryItems.length > 0 && (
+          <div className="space-y-6 pt-8 border-t border-zinc-200">
+            <h2 className="text-xl font-serif text-zinc-800">Itinerario</h2>
+            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            <div className="space-y-6 mt-6">
+              {itineraryItems.map((item: ItineraryItem, i: number) => (
+                <div key={i} className="flex flex-col items-center pb-4">
+                  {item.photoUrl && <img src={item.photoUrl} className="w-full h-24 object-cover rounded-xl mb-3 shadow-sm" alt={item.actividad} />}
+                  <span className="text-xs font-bold tracking-widest mb-1" style={{ color: accentColor }}>{item.hora}</span>
+                  <span className="text-sm font-serif text-zinc-800">{item.actividad}</span>
+                  {item.ubicacion && <span className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">{item.ubicacion}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* MENU */}
+        {isMenuEnabled && bloques.menu?.description && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Menú</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.menu.description}</p>
+          </div>
+        )}
+
+        {/* REGALOS */}
+        {isGiftsEnabled && bloques.gifts?.message && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Mesa de Regalos</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             <div className="text-3xl py-2">🎁</div>
+             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.gifts.message}</p>
+          </div>
+        )}
+
+        {/* CIERRE Y RSVP */}
+        <div className="pt-12 pb-20">
+          {isClosingEnabled && <p className="text-sm font-serif italic text-zinc-600 mb-10">{bloques.closingMessage?.message}</p>}
+          
+          <button onClick={onOpenRsvp} className="px-8 py-3 bg-zinc-900 text-white text-xs uppercase tracking-widest hover:bg-zinc-800 transition-colors shadow-xl rounded-full w-full max-w-[250px]">
+            Confirmar Asistencia
+          </button>
+          
+          {isRsvpDetailsEnabled && (
+            <div className="mt-6 space-y-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                {bloques.rsvpDetails?.rsvpByText || 'Confirmar antes del:'} <span className="font-bold">{bloques.rsvpDetails?.deadlineDate}</span>
+              </p>
+              {bloques.rsvpDetails?.contactPhone && (
+                <a href={`tel:${bloques.rsvpDetails.contactPhone}`} className="inline-block text-[10px] text-zinc-500 border border-zinc-300 px-4 py-2 rounded-full uppercase tracking-widest hover:bg-zinc-100 transition-colors">
+                  📞 Llamar para más detalles
+                </a>
+              )}
+            </div>
+          )}
+
+          <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-12">
+            Invitación para: <br/>
+            <span className="font-bold text-zinc-600 text-xs mt-1 block">{invitado?.nombreFamilia || 'Invitado Especial'}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/types/invitation.ts">
 export interface EnvelopeConfig {
     color: string;
@@ -12977,56 +13317,120 @@ export interface EnvelopeConfig {
     waxSealColor: string;
   }
 
-  export interface HeaderBlock {
-    enabled?: boolean; // <-- NUEVO
-    coupleNames: string;
-    welcomeText: string;
-    coverPhoto: string;
-  }
-  
-  export interface DressCodeBlock {
-    enabled?: boolean; // <-- NUEVO
-    style: 'Formal' | 'Semi-Formal' | 'Casual' | 'Custom';
-    description: string;
-  }
-  
-  export interface ItineraryItem {
-    hora: string;
-    actividad: string;
-  }
+export interface HeaderBlock {
+  enabled?: boolean;
+  coverPhoto?: string;
+  coupleNames?: string;
+  welcomeText?: string;
+  subtitle1?: string;
+  subtitle2?: string;
+}
 
-  // <-- NUEVA INTERFAZ PARA EL ITINERARIO -->
-  export interface ItineraryBlock {
-    enabled?: boolean;
-    items: ItineraryItem[];
-  }
-  
-  export interface CountdownBlock {
-    enabled: boolean;
-    message: string;
-  }
-  
-  // ... (TemplateEstilos se queda igual) ...
-  
-  export interface TemplateEstilos {
-    theme: string;
-    typography: string;
-    musicUrl: string;
-    envelope: EnvelopeConfig;
-  }
-  
-  export interface TemplateBloques {
-    header: HeaderBlock;
-    dressCode: DressCodeBlock;
-    itinerary: ItineraryBlock; // <-- AHORA ES UN OBJETO, NO UN ARRAY
-    countdown: CountdownBlock;
-  }
-  
-  // Este es el objeto global que salvaremos en la base de datos
-  export interface InvitationTemplateState {
-    estilos: TemplateEstilos;
-    bloques: TemplateBloques;
-  }
+export interface RsvpFormBlock {
+  enabled?: boolean;
+  askDietary?: boolean;
+  askAccommodation?: boolean;
+  askEvents?: boolean;
+  askTransportation?: boolean;
+  askSong?: boolean;
+  askChildren?: boolean;
+}
+
+export interface DateTimeBlock {
+  enabled?: boolean;
+  date?: string;
+  time?: string;
+  timeFormat?: '12h' | '24h';
+  showAddToCalendar?: boolean;
+}
+
+export interface VenueItem {
+  id: string;
+  name: string;
+  address: string;
+  cityState: string;
+  mapLink: string;
+  photoUrl?: string;
+  enabled?: boolean;
+}
+
+export interface VenuesBlock {
+  enabled?: boolean;
+  items?: VenueItem[];
+}
+
+export interface ItineraryItem {
+  id?: string;
+  hora: string;
+  actividad: string;
+  ubicacion?: string;
+  photoUrl?: string;
+}
+
+export interface ItineraryBlock {
+  enabled?: boolean;
+  items?: ItineraryItem[];
+}
+
+export interface ParentsBlock {
+  enabled?: boolean;
+  brideParents?: string;
+  groomParents?: string;
+  description?: string;
+}
+
+export interface DressCodeBlock {
+  enabled?: boolean;
+  style?: string;
+  description?: string;
+}
+
+export interface CountdownBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface MenuBlock {
+  enabled?: boolean;
+  description?: string;
+}
+
+export interface ClosingMessageBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface RsvpDetailsBlock {
+  enabled?: boolean;
+  rsvpByText?: string;
+  deadlineDate?: string;
+  contactPhone?: string;
+}
+
+export interface GiftsBlock {
+  enabled?: boolean;
+  message?: string;
+}
+
+export interface TemplateBloques {
+  header: HeaderBlock;
+  rsvpForm?: RsvpFormBlock;
+  dateTime?: DateTimeBlock;
+  venues?: VenuesBlock;
+  itinerary: ItineraryBlock;
+  parents?: ParentsBlock;
+  dressCode: DressCodeBlock;
+  countdown: CountdownBlock;
+  menu?: MenuBlock;
+  closingMessage?: ClosingMessageBlock;
+  rsvpDetails?: RsvpDetailsBlock;
+  gifts?: GiftsBlock;
+}
+
+export interface InvitationTemplateState {
+  estilos: any;
+  bloques: TemplateBloques;
+}
 
   export interface Asistente {
     id?: string;
@@ -13092,6 +13496,9 @@ export interface EnvelopeConfig {
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/xlsx-0.20.1.tgz"
   }
 }
 </file>
