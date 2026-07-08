@@ -1,47 +1,40 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 
-export default function ResumenTab({ evento }: { evento: any }) {
-  const { metricas, fecha, miembros } = evento;
+// 🚀 Recibimos el onGoToInvitados por props
+export default function ResumenTab({ evento, onGoToInvitados }: { evento: any, onGoToInvitados?: (status: any) => void }) {
+  const { metricas, fecha, members } = evento;
   const [tiempoRestante, setTiempoRestante] = useState('');
 
-  // Cuenta regresiva matemática para el evento
   useEffect(() => {
     const target = new Date(fecha.split('T')[0] + 'T12:00:00').getTime();
-
     const calculateTimeLeft = () => {
       const ahora = new Date().getTime();
       const diferencia = target - ahora;
-
-      if (diferencia <= 0) {
-        setTiempoRestante('¡Llegó el gran día! 🎉');
-        return true;
-      }
-
+      if (diferencia <= 0) { setTiempoRestante('¡Llegó el gran día! 🎉'); return true; }
       const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
       const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-
       setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
       return false;
     };
-
     const reachedTarget = calculateTimeLeft();
     if (reachedTarget) return;
-
-    const interval = setInterval(() => {
-      const reached = calculateTimeLeft();
-      if (reached) clearInterval(interval);
-    }, 60000);
-
+    const interval = setInterval(() => { if (calculateTimeLeft()) clearInterval(interval); }, 60000);
     return () => clearInterval(interval);
   }, [fecha]);
 
+  // 🚀 Tarjetas de resumen mapeadas para ser clickeables
+  const cards = [
+    { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400', statusClick: 'TODOS' },
+    { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400', statusClick: 'CONFIRMADO' },
+    { title: 'Rechazados', value: metricas?.familiasRechazadas || 0, icon: '❌', color: 'text-rose-400', statusClick: 'RECHAZADO' },
+    { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400', statusClick: 'PENDIENTE' },
+    { title: 'Pases Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400', statusClick: 'TODOS' },
+  ];
+
   return (
     <div className="space-y-6">
-      
-      {/* CARD DE CUENTA REGRESIVA */}
       <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
@@ -52,15 +45,14 @@ export default function ResumenTab({ evento }: { evento: any }) {
         </div>
       </div>
 
-      {/* REJILLA DE MÉTRICAS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400' },
-          { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400' },
-          { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400' },
-          { title: 'Pases Totales Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400' },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2">
+      {/* 🚀 Cuadrícula de 5 columnas con onClick interactivo */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {cards.map((item, idx) => (
+          <div 
+            key={idx} 
+            onClick={() => onGoToInvitados && onGoToInvitados(item.statusClick)}
+            className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2 cursor-pointer hover:bg-zinc-800/50 hover:border-purple-500/40 transition-all shadow-sm"
+          >
             <div className="flex items-center justify-between text-zinc-400">
               <span className="text-[11px] font-bold uppercase tracking-wider">{item.title}</span>
               <span className="text-sm">{item.icon}</span>
@@ -70,7 +62,6 @@ export default function ResumenTab({ evento }: { evento: any }) {
         ))}
       </div>
 
-      {/* COLABORADORES ACTIVOS EN ESTE DASHBOARD */}
       <div className="bg-zinc-900/20 border border-zinc-800/60 rounded-2xl p-6 space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Equipo de Organización</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -81,9 +72,7 @@ export default function ResumenTab({ evento }: { evento: any }) {
                   {member.user?.nombre?.[0] || member.correoInvitado[0]}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-zinc-200">
-                    {member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}
-                  </h4>
+                  <h4 className="text-xs font-bold text-zinc-200">{member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}</h4>
                   <p className="text-[10px] text-zinc-500">{member.correoInvitado}</p>
                 </div>
               </div>
@@ -94,7 +83,6 @@ export default function ResumenTab({ evento }: { evento: any }) {
           ))}
         </div>
       </div>
-
     </div>
   );
 }

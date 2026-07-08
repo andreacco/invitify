@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ResumenTab from './ResumenTab';
 import InvitadosTab from './InvitadosTab';
@@ -10,12 +10,15 @@ import { signOut } from 'next-auth/react';
 
 export default function EventoDashboardPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('resumen');
   const [evento, setEvento] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar la información del evento desde la API
+  // 🚀 NUEVO: Estado para guardar el filtro seleccionado desde el Resumen
+  const [filtroStatusDesdeResumen, setFiltroStatusDesdeResumen] = useState<'TODOS' | 'CONFIRMADO' | 'RECHAZADO' | 'PENDIENTE'>('TODOS');
+
   useEffect(() => {
     async function fetchEventoData() {
       try {
@@ -33,6 +36,12 @@ export default function EventoDashboardPage() {
     }
     if (id) fetchEventoData();
   }, [id]);
+
+  // 🚀 NUEVO: Función puente que cambia de pestaña y aplica el filtro
+  const handleGoToInvitados = (status: 'TODOS' | 'CONFIRMADO' | 'RECHAZADO' | 'PENDIENTE') => {
+    setFiltroStatusDesdeResumen(status);
+    setActiveTab('invitados');
+  };
 
   if (loading) {
     return (
@@ -52,12 +61,10 @@ export default function EventoDashboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 relative overflow-hidden">
-      {/* Luz ambiental de fondo */}
       <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8 relative z-10">
         
-        {/* HEADER DEL EVENTO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -69,7 +76,6 @@ export default function EventoDashboardPage() {
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
           </div>
           
-          {/* Menú de Pestañas (Tabs Nav) */}
           <div className="flex bg-zinc-900/60 backdrop-blur-md p-1 border border-zinc-800 rounded-xl self-start md:self-auto">
             {[
               { id: 'resumen', label: '📊 Resumen' },
@@ -78,42 +84,26 @@ export default function EventoDashboardPage() {
               { id: 'diseno', label: '🎨 Diseñar', href: `/dashboard/eventos/${id}/invitacion` },
             ].map((tab) => {
               if (tab.href) {
-                return (
-                  <Link
-                    key={tab.id}
-                    href={tab.href}
-                    className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200"
-                  >
-                    {tab.label}
-                  </Link>
-                );
+                return <Link key={tab.id} href={tab.href} className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200">{tab.label}</Link>;
               }
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}>
                   {tab.label}
                 </button>
               );
             })}
           </div>
-          {/* 🚪 BOTÓN DE CERRAR SESIÓN PREMIUM */}
-          <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-              title="Cerrar Sesión"
-            >
-              <span>🚪</span>
-              <span className="hidden sm:inline">Cerrar Sesión</span>
-            </button>
-          </div>
+          
+          <button onClick={() => signOut({ callbackUrl: '/login' })} className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm" title="Cerrar Sesión">
+            <span>🚪</span>
+            <span className="hidden sm:inline">Cerrar Sesión</span>
+          </button>
+        </div>
 
-        {/* CONTENIDO DE LAS PESTAÑAS */}
         <div className="animate-in fade-in duration-200">
-          {activeTab === 'resumen' && <ResumenTab evento={evento} />}
-          {activeTab === 'invitados' && <InvitadosTab evento={evento} />}
+          {/* 🚀 Pasamos la función y el filtro a las pestañas correspondientes */}
+          {activeTab === 'resumen' && <ResumenTab evento={evento} onGoToInvitados={handleGoToInvitados} />}
+          {activeTab === 'invitados' && <InvitadosTab evento={evento} initialFilterStatus={filtroStatusDesdeResumen} />}
           {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
         </div>
 

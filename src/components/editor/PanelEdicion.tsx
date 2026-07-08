@@ -279,12 +279,130 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
 
         {/* CONTENIDO DE LA PESTAÑA DE SOBRES MANTENIDO INTACTO */}
         {activeTab === 'sobres' && (
-          <div className="p-6">
-            <p className="text-zinc-500 text-sm">Configuración visual de tu sobre (Color, estilo de apertura, cera, etc.)</p>
-            {/* Aquí mantienes lo que ya tenías de los sobres */}
-          </div>
+          <div className="space-y-8 animate-in fade-in duration-200 pb-10 p-4">
+            
+            {/* 1. SELECCIÓN DEL COLOR DEL SOBRE */}
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Color del Sobre</h3>
+                <p className="text-[11px] text-zinc-500 font-light mt-0.5">Elige el color exterior del empaque.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
+                  <input
+                    type="color"
+                    value={template.estilos.envelope.color || '#18181b'}
+                    onChange={(e) => setTemplate(prev => ({
+                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
+                    }))}
+                    className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
+                  />
+                   </div>
+                <input
+                  type="text"
+                  value={template.estilos.envelope.color || '#18181b'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 uppercase font-mono"
+                  maxLength={7}
+                />
+              </div>
+                </div>
+
+            <hr className="border-zinc-800" />
+              {/* 2. PATRÓN DE FONDO Y APERTURA */}
+            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Textura / Patrón</label>
+                <select
+                  value={template.estilos.envelope.pattern || 'none'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, pattern: e.target.value as any } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
+                >
+                  <option value="none">Liso (Sin textura)</option>
+                  <option value="botanical">Hojas Botánicas</option>
+                  <option value="floral">Puntos Florales</option>
+                  <option value="wheat">Espigas de Trigo</option>
+                  {/* 👇 NUEVA OPCIÓN PREMIUM 👇 */}
+                  <option value="real">Patrón Real (Grabado)</option>
+                </select>
+              </div>
+               <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Estilo de Apertura</label>
+                <select
+                  value={template.estilos.envelope.openingStyle || 'top'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, openingStyle: e.target.value as any } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
+                >
+                  <option value="top">Solapa Superior (Clásica)</option>
+                  <option value="middle">Apertura Central</option>
+                  <option value="left">Solapa Izquierda</option>
+                  <option value="right">Solapa Derecha</option>
+                  <option value="vertical">Apertura Vertical Asimétrica (Premium)</option>
+                </select>
+              </div>
+               </div>
+
+            <hr className="border-zinc-800" />
+             {/* 3. SELECCIÓN DEL SELLO DE CERA */}
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Sello de Cera</h3>
+              </div>
+              
+              <div className="flex items-center gap-3 mb-4">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider w-24">Color del Sello:</label>
+                <input
+                  type="color"
+                  value={template.estilos.envelope.waxSealColor || '#b45309'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealColor: e.target.value } }
+                  }))}
+                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
+                />
+              </div>
+               <div className="space-y-2.5">
+                {[
+                  { id: 'monogram', name: 'Monograma', desc: 'Iniciales clásicas entrelazadas' },
+                  { id: 'shield', name: 'Escudo Heráldico', desc: 'Escudo real con iniciales' },
+                  { id: 'rose', name: 'Rosa de Castilla', desc: 'Símbolo romántico clásico' },
+                  { id: 'lotus', name: 'Flor de Loto', desc: 'Elegancia orgánica' },
+                  { id: 'eucalyptus', name: 'Rama de Eucalipto', desc: 'Estilo botánico moderno' },
+                  { id: 'blank', name: 'Liso', desc: 'Sello de cera sin relieve' },
+                  { id: 'custom', name: 'Sello Original PNG', desc: 'Sello transparente cargado' }
+                ].map((seal) => (
+                  <button
+                    key={seal.id}
+                    type="button"
+                    onClick={() => setTemplate(prev => ({
+                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealDesign: seal.id as any } }
+                    }))}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${
+                      template.estilos.envelope.waxSealDesign === seal.id
+                        ? 'border-purple-500 bg-purple-500/5 text-purple-400'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-medium text-zinc-200">{seal.name}</span>
+                      <span className="text-[10px] text-zinc-500 font-light">{seal.desc}</span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border-2 transition-all ${
+                      template.estilos.envelope.waxSealDesign === seal.id ? 'border-purple-500 bg-purple-600' : 'border-zinc-700'
+                    }`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            </div>
         )}
       </div>
+
 
       {/* MODAL PARA EDITAR EVENTO DEL TIMELINE */}
       {editingEventIndex !== null && (
