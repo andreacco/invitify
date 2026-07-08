@@ -10141,109 +10141,6 @@ export default function ConfigTab({ evento, setEvento }: ConfigTabProps) {
 }
 </file>
 
-<file path="app/dashboard/eventos/[id]/ResumenTab.tsx">
-'use client';
-
-import { useState, useEffect } from 'react';
-
-export default function ResumenTab({ evento }: { evento: any }) {
-  const { metricas, fecha, miembros } = evento;
-  const [tiempoRestante, setTiempoRestante] = useState('');
-
-  // Cuenta regresiva matemática para el evento
-  useEffect(() => {
-    const target = new Date(fecha.split('T')[0] + 'T12:00:00').getTime();
-
-    const calculateTimeLeft = () => {
-      const ahora = new Date().getTime();
-      const diferencia = target - ahora;
-
-      if (diferencia <= 0) {
-        setTiempoRestante('¡Llegó el gran día! 🎉');
-        return true;
-      }
-
-      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
-      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-
-      setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
-      return false;
-    };
-
-    const reachedTarget = calculateTimeLeft();
-    if (reachedTarget) return;
-
-    const interval = setInterval(() => {
-      const reached = calculateTimeLeft();
-      if (reached) clearInterval(interval);
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [fecha]);
-
-  return (
-    <div className="space-y-6">
-      
-      {/* CARD DE CUENTA REGRESIVA */}
-      <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
-          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
-        </div>
-        <div className="text-2xl font-black bg-purple-500/10 text-purple-300 border border-purple-500/30 px-6 py-2.5 rounded-xl tracking-wider font-mono">
-          {tiempoRestante || 'Calculando...'}
-        </div>
-      </div>
-
-      {/* REJILLA DE MÉTRICAS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400' },
-          { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400' },
-          { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400' },
-          { title: 'Pases Totales Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400' },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2">
-            <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-[11px] font-bold uppercase tracking-wider">{item.title}</span>
-              <span className="text-sm">{item.icon}</span>
-            </div>
-            <p className={`text-2xl font-extrabold ${item.color}`}>{item.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* COLABORADORES ACTIVOS EN ESTE DASHBOARD */}
-      <div className="bg-zinc-900/20 border border-zinc-800/60 rounded-2xl p-6 space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Equipo de Organización</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {evento.members?.map((member: any) => (
-            <div key={member.id} className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-600/10 border border-purple-500/20 flex items-center justify-center font-bold text-purple-400 text-xs uppercase">
-                  {member.user?.nombre?.[0] || member.correoInvitado[0]}
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-zinc-200">
-                    {member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}
-                  </h4>
-                  <p className="text-[10px] text-zinc-500">{member.correoInvitado}</p>
-                </div>
-              </div>
-              <span className="text-[9px] font-bold bg-zinc-900 px-2 py-1 rounded-md text-zinc-400 border border-zinc-800 uppercase">
-                {member.role === 'PERSONALIZADO' ? member.rolPersonalizado : member.role}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-    </div>
-  );
-}
-</file>
-
 <file path="app/dashboard/page.tsx">
 'use client';
 
@@ -11596,34 +11493,6 @@ export async function GET(request: Request) {
 }
 </file>
 
-<file path="app/api/guests/[id]/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> } // 1. params ahora es una promesa
-) {
-  try {
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    // 2. Extraemos el id usando await
-    const { id } = await params;
-
-    await prisma.invitadoPrincipal.delete({
-      where: { id }
-    });
-
-    return NextResponse.json({ message: 'Grupo de invitados eliminado con éxito (Cascada activada).' });
-  } catch (error) {
-    console.error('PRISMA_DELETE_GUEST_ERROR:', error);
-    return NextResponse.json({ error: 'Error al eliminar el invitado.' }, { status: 500 });
-  }
-}
-</file>
-
 <file path="app/api/rsvp/[codigoAcceso]/route.ts">
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -11786,126 +11655,91 @@ export async function POST(
 // y si por favor, creemos el dashboard para ver los numeros de cuantos han confir
 </file>
 
-<file path="app/dashboard/eventos/[id]/page.tsx">
+<file path="app/dashboard/eventos/[id]/ResumenTab.tsx">
 'use client';
-
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import ResumenTab from './ResumenTab';
-import InvitadosTab from './InvitadosTab';
-import ConfigTab from './ConfigTab';
-import { signOut } from 'next-auth/react';
 
-export default function EventoDashboardPage() {
-  const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('resumen');
-  const [evento, setEvento] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// 🚀 Recibimos el onGoToInvitados por props
+export default function ResumenTab({ evento, onGoToInvitados }: { evento: any, onGoToInvitados?: (status: any) => void }) {
+  const { metricas, fecha, members } = evento;
+  const [tiempoRestante, setTiempoRestante] = useState('');
 
-  // Cargar la información del evento desde la API
   useEffect(() => {
-    async function fetchEventoData() {
-      try {
-        const res = await fetch(`/api/event/${id}`);
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el evento.');
-        
-        setEvento(data.evento);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (id) fetchEventoData();
-  }, [id]);
+    const target = new Date(fecha.split('T')[0] + 'T12:00:00').getTime();
+    const calculateTimeLeft = () => {
+      const ahora = new Date().getTime();
+      const diferencia = target - ahora;
+      if (diferencia <= 0) { setTiempoRestante('¡Llegó el gran día! 🎉'); return true; }
+      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
+      setTiempoRestante(`${dias}d ${horas}h ${minutos}m`);
+      return false;
+    };
+    const reachedTarget = calculateTimeLeft();
+    if (reachedTarget) return;
+    const interval = setInterval(() => { if (calculateTimeLeft()) clearInterval(interval); }, 60000);
+    return () => clearInterval(interval);
+  }, [fecha]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
-      </div>
-    );
-  }
-
-  if (error || !evento) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
-        ⚠️ {error || 'Evento no encontrado.'}
-      </div>
-    );
-  }
+  // 🚀 Tarjetas de resumen mapeadas para ser clickeables
+  const cards = [
+    { title: 'Total Invitaciones', value: evento._count?.invitados || 0, icon: '✉️', color: 'text-blue-400', statusClick: 'TODOS' },
+    { title: 'Confirmados (Grupos)', value: metricas?.familiasConfirmadas || 0, icon: '✅', color: 'text-emerald-400', statusClick: 'CONFIRMADO' },
+    { title: 'Rechazados', value: metricas?.familiasRechazadas || 0, icon: '❌', color: 'text-rose-400', statusClick: 'RECHAZADO' },
+    { title: 'Pendientes', value: metricas?.familiasPendientes || 0, icon: '⏳', color: 'text-amber-400', statusClick: 'PENDIENTE' },
+    { title: 'Pases Asignados', value: metricas?.totalCuposAsignados || 0, icon: '🎟️', color: 'text-purple-400', statusClick: 'TODOS' },
+  ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 relative overflow-hidden">
-      {/* Luz ambiental de fondo */}
-      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full pointer-events-none" />
-
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* HEADER DEL EVENTO */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-bold tracking-wider uppercase">
-                {evento.tipo}
-              </span>
-              <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
-          </div>
-          
-          {/* Menú de Pestañas (Tabs Nav) */}
-          <div className="flex bg-zinc-900/60 backdrop-blur-md p-1 border border-zinc-800 rounded-xl self-start md:self-auto">
-            {[
-              { id: 'resumen', label: '📊 Resumen' },
-              { id: 'invitados', label: '👥 Invitados' },
-              { id: 'config', label: '⚙️ Configuración' },
-              { id: 'diseno', label: '🎨 Diseñar', href: `/dashboard/eventos/${id}/invitacion` },
-            ].map((tab) => {
-              if (tab.href) {
-                return (
-                  <Link
-                    key={tab.id}
-                    href={tab.href}
-                    className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200"
-                  >
-                    {tab.label}
-                  </Link>
-                );
-              }
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-          {/* 🚪 BOTÓN DE CERRAR SESIÓN PREMIUM */}
-          <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-              title="Cerrar Sesión"
-            >
-              <span>🚪</span>
-              <span className="hidden sm:inline">Cerrar Sesión</span>
-            </button>
-          </div>
-
-        {/* CONTENIDO DE LAS PESTAÑAS */}
-        <div className="animate-in fade-in duration-200">
-          {activeTab === 'resumen' && <ResumenTab evento={evento} />}
-          {activeTab === 'invitados' && <InvitadosTab evento={evento} />}
-          {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/30 border border-purple-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-100">Tiempo restante para la gran fecha</h2>
+          <p className="text-xs text-zinc-400">Programado para el: {new Date(fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-ES', { dateStyle: 'long' })}</p>
         </div>
+        <div className="text-2xl font-black bg-purple-500/10 text-purple-300 border border-purple-500/30 px-6 py-2.5 rounded-xl tracking-wider font-mono">
+          {tiempoRestante || 'Calculando...'}
+        </div>
+      </div>
 
+      {/* 🚀 Cuadrícula de 5 columnas con onClick interactivo */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {cards.map((item, idx) => (
+          <div 
+            key={idx} 
+            onClick={() => onGoToInvitados && onGoToInvitados(item.statusClick)}
+            className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-2 cursor-pointer hover:bg-zinc-800/50 hover:border-purple-500/40 transition-all shadow-sm"
+          >
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-[11px] font-bold uppercase tracking-wider">{item.title}</span>
+              <span className="text-sm">{item.icon}</span>
+            </div>
+            <p className={`text-2xl font-extrabold ${item.color}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-zinc-900/20 border border-zinc-800/60 rounded-2xl p-6 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Equipo de Organización</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {evento.members?.map((member: any) => (
+            <div key={member.id} className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-600/10 border border-purple-500/20 flex items-center justify-center font-bold text-purple-400 text-xs uppercase">
+                  {member.user?.nombre?.[0] || member.correoInvitado[0]}
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-zinc-200">{member.user ? `${member.user.nombre} ${member.user.apellido}` : 'Invitado pendiente'}</h4>
+                  <p className="text-[10px] text-zinc-500">{member.correoInvitado}</p>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold bg-zinc-900 px-2 py-1 rounded-md text-zinc-400 border border-zinc-800 uppercase">
+                {member.role === 'PERSONALIZADO' ? member.rolPersonalizado : member.role}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -12074,31 +11908,430 @@ export async function POST(request: Request) {
 }
 </file>
 
+<file path="app/api/guests/[id]/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const { id } = await params;
+
+    await prisma.invitadoPrincipal.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ message: 'Grupo de invitados eliminado con éxito.' });
+  } catch (error) {
+    console.error('PRISMA_DELETE_GUEST_ERROR:', error);
+    return NextResponse.json({ error: 'Error al eliminar el invitado.' }, { status: 500 });
+  }
+}
+
+// 🚀 NUEVO: Método PUT para actualizar un invitado desde el Lapicito
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const { id } = await params;
+    const body = await request.json();
+    const { nombreFamilia, telefono, observaciones, invitadoDe } = body;
+
+    const invitadoActualizado = await prisma.invitadoPrincipal.update({
+      where: { id },
+      data: {
+        nombreFamilia,
+        telefono,
+        observaciones: observaciones || null,
+        invitadoDe
+      }
+    });
+
+    return NextResponse.json({ success: true, invitado: invitadoActualizado });
+  } catch (error) {
+    console.error('PRISMA_UPDATE_GUEST_ERROR:', error);
+    return NextResponse.json({ error: 'Error al actualizar el invitado.' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/dashboard/eventos/[id]/page.tsx">
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import ResumenTab from './ResumenTab';
+import InvitadosTab from './InvitadosTab';
+import ConfigTab from './ConfigTab';
+import { signOut } from 'next-auth/react';
+
+export default function EventoDashboardPage() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('resumen');
+  const [evento, setEvento] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 🚀 NUEVO: Estado para guardar el filtro seleccionado desde el Resumen
+  const [filtroStatusDesdeResumen, setFiltroStatusDesdeResumen] = useState<'TODOS' | 'CONFIRMADO' | 'RECHAZADO' | 'PENDIENTE'>('TODOS');
+
+  useEffect(() => {
+    async function fetchEventoData() {
+      try {
+        const res = await fetch(`/api/event/${id}`);
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el evento.');
+        
+        setEvento(data.evento);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (id) fetchEventoData();
+  }, [id]);
+
+  // 🚀 NUEVO: Función puente que cambia de pestaña y aplica el filtro
+  const handleGoToInvitados = (status: 'TODOS' | 'CONFIRMADO' | 'RECHAZADO' | 'PENDIENTE') => {
+    setFiltroStatusDesdeResumen(status);
+    setActiveTab('invitados');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+      </div>
+    );
+  }
+
+  if (error || !evento) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
+        ⚠️ {error || 'Evento no encontrado.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 relative overflow-hidden">
+      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto space-y-8 relative z-10">
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-bold tracking-wider uppercase">
+                {evento.tipo}
+              </span>
+              <span className="text-xs text-zinc-500">ID: {evento.slug}</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-100">{evento.titulo}</h1>
+          </div>
+          
+          <div className="flex bg-zinc-900/60 backdrop-blur-md p-1 border border-zinc-800 rounded-xl self-start md:self-auto">
+            {[
+              { id: 'resumen', label: '📊 Resumen' },
+              { id: 'invitados', label: '👥 Invitados' },
+              { id: 'config', label: '⚙️ Configuración' },
+              { id: 'diseno', label: '🎨 Diseñar', href: `/dashboard/eventos/${id}/invitacion` },
+            ].map((tab) => {
+              if (tab.href) {
+                return <Link key={tab.id} href={tab.href} className="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-zinc-400 hover:text-zinc-200">{tab.label}</Link>;
+              }
+              return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id ? 'bg-purple-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          
+          <button onClick={() => signOut({ callbackUrl: '/login' })} className="px-3 py-2 bg-zinc-900 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-sm" title="Cerrar Sesión">
+            <span>🚪</span>
+            <span className="hidden sm:inline">Cerrar Sesión</span>
+          </button>
+        </div>
+
+        <div className="animate-in fade-in duration-200">
+          {/* 🚀 Pasamos la función y el filtro a las pestañas correspondientes */}
+          {activeTab === 'resumen' && <ResumenTab evento={evento} onGoToInvitados={handleGoToInvitados} />}
+          {activeTab === 'invitados' && <InvitadosTab evento={evento} initialFilterStatus={filtroStatusDesdeResumen} />}
+          {activeTab === 'config' && <ConfigTab evento={evento} setEvento={setEvento} />}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/templates/PearlElegance.tsx">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { InvitationTemplateState, ItineraryItem } from '@/types/invitation';
+
+interface PearlEleganceProps {
+  evento: any;
+  invitado: any;
+  onOpenRsvp: () => void;
+}
+
+export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEleganceProps) {
+  const template: InvitationTemplateState = evento.template;
+  const { bloques } = template;
+  const accentColor = evento.colorPrincipal || '#d4af37'; 
+
+  // Controladores de visualización por bloque
+  const isHeaderEnabled = bloques.header?.enabled !== false;
+  const isCountdownEnabled = bloques.countdown?.enabled !== false;
+  const isLocationEnabled = bloques.venues?.enabled !== false;
+  const isDressCodeEnabled = bloques.dressCode?.enabled !== false;
+  const isItineraryEnabled = bloques.itinerary?.enabled !== false;
+  const isParentsEnabled = bloques.parents?.enabled !== false;
+  const isMenuEnabled = bloques.menu?.enabled !== false;
+  const isClosingEnabled = bloques.closingMessage?.enabled !== false;
+  const isRsvpDetailsEnabled = bloques.rsvpDetails?.enabled !== false;
+  const isGiftsEnabled = bloques.gifts?.enabled !== false;
+
+  const itineraryItems = bloques.itinerary?.items || [];
+  const venues = bloques.venues?.items || [];
+
+  // Lógica del Countdown Real
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    if (!bloques.dateTime?.date) return;
+    const targetDate = new Date(`${bloques.dateTime.date}T${bloques.dateTime.time || '00:00'}`).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((distance % (1000 * 60)) / 1000),
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [bloques.dateTime?.date, bloques.dateTime?.time]);
+
+  // Partículas
+  const [particles, setParticles] = useState<any[]>([]);
+  useEffect(() => {
+    const colors = ['#a855f7', '#d4af37', '#10b981', '#fdf8f6']; 
+    const newParticles = Array.from({ length: 120 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      duration: `${Math.random() * 10 + 10}s`, 
+      delay: `-${Math.random() * 20}s`, 
+      size: `${Math.random() * 3 + 1}px`, 
+      color: colors[Math.floor(Math.random() * colors.length)],
+      twinkleDuration: `${Math.random() * 2 + 1.5}s`, 
+    }));
+    setParticles(newParticles);
+  }, []);
+
+  return (
+    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        <style>{`@keyframes fallDown { 0% { top: -5%; } 100% { top: 105%; } } @keyframes twinkle { 0% { transform: scale(0.5); opacity: 0.2; } 50% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(0.5); opacity: 0.2; } }`}</style>
+        {particles.map(p => <div key={p.id} className="absolute rounded-full" style={{ left: p.left, width: p.size, height: p.size, backgroundColor: p.color, boxShadow: `0 0 6px 1px ${p.color}`, animation: `fallDown ${p.duration} linear infinite ${p.delay}, twinkle ${p.twinkleDuration} ease-in-out infinite ${p.delay}` }} />)}
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm mx-auto space-y-12 py-10">
+        
+        {/* ENCABEZADO Y NOMBRES */}
+        {isHeaderEnabled && (
+          <div className="space-y-6">
+            <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-400">{bloques.header?.welcomeText || 'Nuestra Boda'}</span>
+            <h1 className="text-4xl font-serif text-zinc-800 leading-tight">{bloques.header?.coupleNames}</h1>
+            {(bloques.header?.subtitle1 || bloques.header?.subtitle2) && (
+              <div className="text-xs text-zinc-500 italic space-y-1">
+                {bloques.header.subtitle1 && <p>{bloques.header.subtitle1}</p>}
+                {bloques.header.subtitle2 && <p>{bloques.header.subtitle2}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PADRES Y PADRINOS */}
+        {isParentsEnabled && (bloques.parents?.brideParents || bloques.parents?.groomParents) && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.parents.description || 'Con la bendición de nuestros padres'}</p>
+            {bloques.parents.brideParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.brideParents}</p>}
+            {bloques.parents.brideParents && bloques.parents.groomParents && <span className="text-xs text-zinc-400">&</span>}
+            {bloques.parents.groomParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.groomParents}</p>}
+          </div>
+        )}
+
+        {/* CUENTA REGRESIVA REAL */}
+        {isCountdownEnabled && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.countdown?.message || 'Faltan'}</p>
+             <div className="flex justify-center gap-6 text-zinc-700">
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.days}</span><p className="text-[9px] uppercase tracking-widest mt-1">Días</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.hours}</span><p className="text-[9px] uppercase tracking-widest mt-1">Hrs</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.minutes}</span><p className="text-[9px] uppercase tracking-widest mt-1">Min</p></div>
+                <div className="text-center"><span className="text-3xl font-light">{timeLeft.seconds}</span><p className="text-[9px] uppercase tracking-widest mt-1">Seg</p></div>
+             </div>
+             {bloques.dateTime?.showAddToCalendar !== false && (
+               <button className="mt-4 px-4 py-2 border border-zinc-300 rounded-full text-[10px] uppercase tracking-widest text-zinc-600 hover:bg-zinc-100 transition-colors">Añadir al Calendario</button>
+             )}
+          </div>
+        )}
+
+        {/* UBICACIONES (VENUES) */}
+        {isLocationEnabled && venues.length > 0 && (
+          <div className="space-y-8 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Ubicaciones</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             {venues.map((venue, idx) => venue.enabled && (
+               <div key={idx} className="space-y-2">
+                 {venue.photoUrl && <img src={venue.photoUrl} alt={venue.name} className="w-full h-32 object-cover rounded-xl mb-4 shadow-md" />}
+                 <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-700">{venue.name}</h3>
+                 <p className="text-xs text-zinc-500 leading-relaxed">{venue.address} <br/> {venue.cityState}</p>
+                 {venue.mapLink && (
+                   <a href={venue.mapLink} target="_blank" rel="noreferrer" className="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-white bg-zinc-800 px-4 py-2 rounded-full">Ver en Mapa</a>
+                 )}
+               </div>
+             ))}
+          </div>
+        )}
+
+        {/* DRESS CODE */}
+        {isDressCodeEnabled && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+            <h2 className="text-xl font-serif text-zinc-800">Código de Vestimenta</h2>
+            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            <p className="font-bold text-sm uppercase tracking-widest text-zinc-700">{bloques.dressCode?.style}</p>
+            <p className="text-xs text-zinc-500">{bloques.dressCode?.description}</p>
+          </div>
+        )}
+
+        {/* ITINERARIO VISUAL */}
+        {isItineraryEnabled && itineraryItems.length > 0 && (
+          <div className="space-y-6 pt-8 border-t border-zinc-200">
+            <h2 className="text-xl font-serif text-zinc-800">Itinerario</h2>
+            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+            <div className="space-y-6 mt-6">
+              {itineraryItems.map((item: ItineraryItem, i: number) => (
+                <div key={i} className="flex flex-col items-center pb-4">
+                  {item.photoUrl && <img src={item.photoUrl} className="w-full h-24 object-cover rounded-xl mb-3 shadow-sm" alt={item.actividad} />}
+                  <span className="text-xs font-bold tracking-widest mb-1" style={{ color: accentColor }}>{item.hora}</span>
+                  <span className="text-sm font-serif text-zinc-800">{item.actividad}</span>
+                  {item.ubicacion && <span className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">{item.ubicacion}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* MENU */}
+        {isMenuEnabled && bloques.menu?.description && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Menú</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.menu.description}</p>
+          </div>
+        )}
+
+        {/* REGALOS */}
+        {isGiftsEnabled && bloques.gifts?.message && (
+          <div className="space-y-4 pt-8 border-t border-zinc-200">
+             <h2 className="text-xl font-serif text-zinc-800">Mesa de Regalos</h2>
+             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
+             <div className="text-3xl py-2">🎁</div>
+             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.gifts.message}</p>
+          </div>
+        )}
+
+        {/* CIERRE Y RSVP */}
+        <div className="pt-12 pb-20">
+          {isClosingEnabled && <p className="text-sm font-serif italic text-zinc-600 mb-10">{bloques.closingMessage?.message}</p>}
+          
+          <button onClick={onOpenRsvp} className="px-8 py-3 bg-zinc-900 text-white text-xs uppercase tracking-widest hover:bg-zinc-800 transition-colors shadow-xl rounded-full w-full max-w-[250px]">
+            Confirmar Asistencia
+          </button>
+          
+          {isRsvpDetailsEnabled && (
+            <div className="mt-6 space-y-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                {bloques.rsvpDetails?.rsvpByText || 'Confirmar antes del:'} <span className="font-bold">{bloques.rsvpDetails?.deadlineDate}</span>
+              </p>
+              {bloques.rsvpDetails?.contactPhone && (
+                <a href={`tel:${bloques.rsvpDetails.contactPhone}`} className="inline-block text-[10px] text-zinc-500 border border-zinc-300 px-4 py-2 rounded-full uppercase tracking-widest hover:bg-zinc-100 transition-colors">
+                  📞 Llamar para más detalles
+                </a>
+              )}
+            </div>
+          )}
+
+          <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-12">
+            Invitación para: <br/>
+            <span className="font-bold text-zinc-600 text-xs mt-1 block">{invitado?.nombreFamilia || 'Invitado Especial'}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="app/dashboard/eventos/[id]/InvitadosTab.tsx">
 'use client';
 
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
-export default function InvitadosTab({ evento }: { evento: any }) {
+export default function InvitadosTab({ evento, initialFilterStatus = 'TODOS' }: { evento: any, initialFilterStatus?: 'TODOS'|'CONFIRMADO'|'RECHAZADO'|'PENDIENTE' }) {
   const [invitados, setInvitados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   
-  // Estado del Filtro
   const [filtroDe, setFiltroDe] = useState<'TODOS' | 'NOVIA' | 'NOVIO' | 'AMBOS'>('TODOS');
+  // 🚀 Estado para el filtro de status que viene heredado
+  const [filtroStatus, setFiltroStatus] = useState(initialFilterStatus);
+
+  // Reaccionar si el filtro global cambia (cuando hacen click en la tarjeta de Resumen)
+  useEffect(() => { setFiltroStatus(initialFilterStatus); }, [initialFilterStatus]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'masiva' | 'manual'>('masiva');
-
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false); // <-- Nuevo estado para el Excel
+  
+  // 🚀 Estado para el modal de edición
+  const [editingGuest, setEditingGuest] = useState<any | null>(null);
+
   const [manualData, setManualData] = useState({
-    nombreFamilia: '',
-    pasesTotales: 1,
-    telefono: '',
-    invitadoDe: 'AMBOS',
-    observaciones: '' // <-- Nuevo campo
+    nombreFamilia: '', pasesTotales: 1, telefono: '', invitadoDe: 'AMBOS', observaciones: '' 
   });
 
   const loadInvitados = async () => {
@@ -12114,15 +12347,10 @@ export default function InvitadosTab({ evento }: { evento: any }) {
     }
   };
 
-  useEffect(() => {
-    loadInvitados();
-  }, [evento.id]);
+  useEffect(() => { loadInvitados(); }, [evento.id]);
 
   const handleGuardarManual = async () => {
-    if (!manualData.nombreFamilia.trim()) {
-      return alert('El nombre de la familia o invitado es obligatorio.');
-    }
-
+    if (!manualData.nombreFamilia.trim()) return alert('El nombre es obligatorio.');
     setIsSaving(true);
     try {
       const res = await fetch('/api/event/invitados', {
@@ -12135,33 +12363,46 @@ export default function InvitadosTab({ evento }: { evento: any }) {
             pasesTotales: evento.configPermiteAcompanantes ? manualData.pasesTotales : 1,
             telefono: manualData.telefono,
             invitadoDe: manualData.invitadoDe,
-            observaciones: manualData.observaciones, // <-- Enviamos observaciones
+            observaciones: manualData.observaciones, 
             nombresAsistentes: [manualData.nombreFamilia] 
           }]
         })
       });
-
-      if (!res.ok) throw new Error('Error al guardar el invitado');
-      
+      if (!res.ok) throw new Error('Error al guardar');
       setManualData({ nombreFamilia: '', pasesTotales: 1, telefono: '', invitadoDe: 'AMBOS', observaciones: '' });
       setIsModalOpen(false);
       await loadInvitados();
-      
     } catch (error) {
-      console.error(error);
       alert('Hubo un problema al guardar el invitado.');
-    } finally {
-      setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
-  // --- FUNCIÓN PARA LEER EL EXCEL/CSV ---
+  // 🚀 Función para editar un invitado
+  const handleActualizarInvitado = async () => {
+    if (!editingGuest.nombreFamilia.trim()) return alert('El nombre no puede estar vacío.');
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/guests/${editingGuest.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombreFamilia: editingGuest.nombreFamilia,
+          telefono: editingGuest.telefono,
+          observaciones: editingGuest.observaciones,
+          invitadoDe: editingGuest.invitadoDe
+        })
+      });
+      if(res.ok) {
+        setEditingGuest(null);
+        await loadInvitados();
+      }
+    } finally { setIsSaving(false); }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setIsUploading(true);
-
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -12177,86 +12418,69 @@ export default function InvitadosTab({ evento }: { evento: any }) {
         nombresAsistentes: [row.nombreFamilia || row.NombreFamilia || row.Nombre || row.nombre || '']
       })).filter((inv: any) => inv.nombreFamilia);
 
-      if (listaInvitados.length === 0) {
-         alert("El archivo está vacío o no tiene las columnas correctas.");
-         setIsUploading(false);
-         return;
-      }
+      if (listaInvitados.length === 0) return alert("Archivo vacío o formato incorrecto.");
 
       const res = await fetch('/api/event/invitados', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId: evento.id,
-          listaInvitados
-        })
+        body: JSON.stringify({ eventId: evento.id, listaInvitados })
       });
-
       const result = await res.json();
-      
       if (res.ok) {
         setInvitados([...invitados, ...result.invitados]);
-        setIsModalOpen(false); // Cierra el modal al terminar
+        setIsModalOpen(false);
         alert(`¡Éxito! Se cargaron ${result.invitados.length} invitados.`);
-      } else {
-        throw new Error(result.error || 'Error al guardar masivamente.');
-      }
+      } else throw new Error(result.error);
     } catch (err) {
-      console.error(err);
-      alert("Error leyendo o guardando el archivo. Revisa el formato.");
+      alert("Error leyendo o guardando el archivo.");
     } finally {
       setIsUploading(false);
-      if (e.target) e.target.value = ''; // Permite resubir el mismo archivo
+      if (e.target) e.target.value = '';
     }
   };
 
-  // Botón de WhatsApp
   const handleWhatsApp = async (invitado: any) => {
     const enlace = `${window.location.origin}/invitacion/${invitado.codigoAcceso}`;
     const mensaje = `¡Hola ${invitado.nombreFamilia}! Te comparto la invitación para nuestra boda. Confirma tu asistencia aquí: ${enlace}`;
     const numeroLimpio = invitado.telefono?.replace(/\D/g, '');
-    
     await fetch(`/api/guests/${invitado.id}/mark-sent`, { method: 'POST' });
-    
     setInvitados(prev => prev.map(i => i.id === invitado.id ? { ...i, mensajeEnviado: true } : i));
-
     window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   const invitadosFiltrados = invitados.filter(inv => {
     const pasaFiltroDe = filtroDe === 'TODOS' || inv.invitadoDe === filtroDe;
+    const pasaStatus = filtroStatus === 'TODOS' || inv.statusRSVP === filtroStatus;
     const pasaBusqueda = inv.nombreFamilia.toLowerCase().includes(busqueda.toLowerCase()) || 
                          (inv.telefono && inv.telefono.includes(busqueda));
-    return pasaFiltroDe && pasaBusqueda;
+    return pasaFiltroDe && pasaStatus && pasaBusqueda;
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in fade-in duration-300">
       
-      {/* ACCIONES SUPERIORES */}
+      {/* ACCIONES SUPERIORES Y FILTROS */}
       <div className="flex flex-col gap-4 bg-zinc-900/20 p-4 border border-zinc-800/60 rounded-2xl">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <input
-            type="text"
-            placeholder="🔍 Buscar familia o teléfono..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none"
-          />
-          <button 
-            className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md"
-            onClick={() => setIsModalOpen(true)}
-          >
-            ➕ Agregar Familia / Grupo
-          </button>
+          <input type="text" placeholder="🔍 Buscar familia o teléfono..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full sm:w-72 bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 focus:outline-none" />
+          <button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto px-4 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md">➕ Agregar Familia / Grupo</button>
         </div>
 
-        {/* Filtros Novia/Novio */}
-        <div className="flex gap-2 border-t border-zinc-800/50 pt-3">
-          <button onClick={() => setFiltroDe('TODOS')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'TODOS' ? 'bg-zinc-100 text-black border-white' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Todos</button>
-          <button onClick={() => setFiltroDe('AMBOS')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'AMBOS' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Ambos</button>
-          <button onClick={() => setFiltroDe('NOVIA')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'NOVIA' ? 'bg-pink-500/20 text-pink-400 border-pink-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>De la Novia</button>
-          <button onClick={() => setFiltroDe('NOVIO')} className={`px-3 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full border transition-all ${filtroDe === 'NOVIO' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Del Novio</button>
+        <div className="flex flex-col sm:flex-row gap-4 border-t border-zinc-800/50 pt-3">
+          <div className="flex gap-2 flex-wrap">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold self-center mr-2">Status:</span>
+            <button onClick={() => setFiltroStatus('TODOS')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroStatus === 'TODOS' ? 'bg-zinc-100 text-black border-white' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Todos</button>
+            <button onClick={() => setFiltroStatus('CONFIRMADO')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroStatus === 'CONFIRMADO' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Confirmados</button>
+            <button onClick={() => setFiltroStatus('RECHAZADO')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroStatus === 'RECHAZADO' ? 'bg-rose-500/20 text-rose-400 border-rose-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Rechazados</button>
+            <button onClick={() => setFiltroStatus('PENDIENTE')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroStatus === 'PENDIENTE' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Pendientes</button>
+          </div>
+          <div className="flex gap-2 flex-wrap sm:ml-auto">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold self-center mr-2">Lado:</span>
+            <button onClick={() => setFiltroDe('TODOS')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroDe === 'TODOS' ? 'bg-zinc-100 text-black border-white' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Todos</button>
+            <button onClick={() => setFiltroDe('AMBOS')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroDe === 'AMBOS' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Ambos</button>
+            <button onClick={() => setFiltroDe('NOVIA')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroDe === 'NOVIA' ? 'bg-pink-500/20 text-pink-400 border-pink-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Novia</button>
+            <button onClick={() => setFiltroDe('NOVIO')} className={`px-3 py-1 text-[10px] uppercase font-bold rounded-full border transition-all ${filtroDe === 'NOVIO' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}>Novio</button>
+          </div>
         </div>
       </div>
 
@@ -12284,10 +12508,11 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                     <td className="p-4 font-bold text-zinc-200">
                       {inv.nombreFamilia}
                       <span className="block font-mono text-[10px] text-purple-400 font-normal mt-0.5">{inv.codigoAcceso}</span>
-                      {inv.observaciones && <span className="block text-[9px] text-zinc-500 italic mt-0.5">{inv.observaciones}</span>}
+                      {/* 🚀 Observaciones visibles */}
+                      {inv.observaciones && <span className="block text-[10px] text-amber-500 font-normal mt-0.5">📝 {inv.observaciones}</span>}
                     </td>
                     <td className="p-4">
-                      <span className={`text-[9px] px-2 py-1 rounded-full uppercase tracking-widest font-bold ${inv.invitadoDe === 'NOVIA' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' : inv.invitadoDe === 'NOVIO' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400'}`}>
+                      <span className={`text-[9px] px-2 py-1 rounded-full uppercase tracking-widest font-bold ${inv.invitadoDe === 'NOVIA' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' : inv.invitadoDe === 'NOVIO' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
                         {inv.invitadoDe || 'AMBOS'}
                       </span>
                     </td>
@@ -12303,16 +12528,12 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                     </td>
                     <td className="p-4">
                       <div className="flex justify-center items-center gap-2">
-                        <button 
-                          onClick={() => handleWhatsApp(inv)}
-                          disabled={!inv.telefono}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                            inv.mensajeEnviado 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
-                              : 'bg-zinc-800 text-white hover:bg-zinc-700 disabled:opacity-30'
-                          }`}
-                        >
+                        <button onClick={() => handleWhatsApp(inv)} disabled={!inv.telefono} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${inv.mensajeEnviado ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-zinc-800 text-white hover:bg-zinc-700 disabled:opacity-30'}`}>
                           {inv.mensajeEnviado ? '✓ Enviado' : '💬 Enviar'}
+                        </button>
+                        {/* 🚀 Botón Editar (Lápiz) */}
+                        <button onClick={() => setEditingGuest(inv)} className="w-8 h-8 flex items-center justify-center bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white rounded-lg transition-colors border border-zinc-700 hover:border-purple-500" title="Editar Información">
+                          ✏️
                         </button>
                       </div>
                     </td>
@@ -12324,7 +12545,45 @@ export default function InvitadosTab({ evento }: { evento: any }) {
         )}
       </div>
 
-      {/* MODAL AGREGAR INVITADO */}
+      {/* 🚀 MODAL DE EDICIÓN DEL LÁPIZ */}
+      {editingGuest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm" onClick={() => setEditingGuest(null)} />
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-zinc-100">✏️ Editar Invitado</h3>
+              <button onClick={() => setEditingGuest(null)} className="text-zinc-500 hover:text-zinc-300">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Invitado</label>
+                <input type="text" value={editingGuest.nombreFamilia} onChange={e => setEditingGuest({...editingGuest, nombreFamilia: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">¿De parte de quién?</label>
+                <select value={editingGuest.invitadoDe} onChange={e => setEditingGuest({...editingGuest, invitadoDe: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100">
+                  <option value="AMBOS">Ambos / General</option>
+                  <option value="NOVIA">De la Novia</option>
+                  <option value="NOVIO">Del Novio</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
+                <input type="tel" value={editingGuest.telefono} onChange={e => setEditingGuest({...editingGuest, telefono: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Observaciones / Notas Especiales</label>
+                <input type="text" value={editingGuest.observaciones || ''} onChange={e => setEditingGuest({...editingGuest, observaciones: e.target.value})} placeholder="Ej: VIP, Mesa 1..." className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" />
+              </div>
+              <button onClick={handleActualizarInvitado} disabled={isSaving} className="w-full py-2.5 mt-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all">
+                {isSaving ? 'Guardando cambios...' : 'Actualizar Información'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AGREGAR INVITADO (CREACIÓN) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
@@ -12347,8 +12606,6 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                   <p className="text-sm text-zinc-300 font-medium mb-1">
                     {isUploading ? 'Procesando archivo...' : 'Sube tu archivo de Excel o CSV'}
                   </p>
-                  
-                  {/* INPUT FILE CONECTADO A handleFileUpload */}
                   <label className={`bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors mt-4 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                     {isUploading ? 'Cargando...' : 'Seleccionar Archivo'}
                     <input type="file" accept=".csv, .xlsx" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
@@ -12357,15 +12614,9 @@ export default function InvitadosTab({ evento }: { evento: any }) {
               </div>
             ) : (
               <div className="space-y-4">
-                
-                {/* Selector de Novia/Novio */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">¿De parte de quién?</label>
-                  <select 
-                    value={manualData.invitadoDe}
-                    onChange={e => setManualData({...manualData, invitadoDe: e.target.value})}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100"
-                  >
+                  <select value={manualData.invitadoDe} onChange={e => setManualData({...manualData, invitadoDe: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100">
                     <option value="AMBOS">Ambos / General</option>
                     <option value="NOVIA">De la Novia</option>
                     <option value="NOVIO">Del Novio</option>
@@ -12376,62 +12627,32 @@ export default function InvitadosTab({ evento }: { evento: any }) {
                   <>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre Familia / Grupo</label>
-                      <input 
-                        type="text" 
-                        value={manualData.nombreFamilia}
-                        onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})}
-                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Familia Pérez" 
-                      />
+                      <input type="text" value={manualData.nombreFamilia} onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Familia Pérez" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total de Pases Asignados</label>
-                      <input 
-                        type="number" min="1" 
-                        value={manualData.pasesTotales}
-                        onChange={e => setManualData({...manualData, pasesTotales: parseInt(e.target.value) || 1})}
-                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: 4" 
-                      />
+                      <input type="number" min="1" value={manualData.pasesTotales} onChange={e => setManualData({...manualData, pasesTotales: parseInt(e.target.value) || 1})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: 4" />
                     </div>
                   </>
                 ) : (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nombre del Invitado</label>
-                    <input 
-                      type="text" 
-                      value={manualData.nombreFamilia}
-                      onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})}
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Juan Pérez" 
-                    />
+                    <input type="text" value={manualData.nombreFamilia} onChange={e => setManualData({...manualData, nombreFamilia: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: Juan Pérez" />
                     <p className="text-[10px] text-amber-500/80 mt-1">⚠️ Este evento no permite acompañantes (Pase único).</p>
                   </div>
                 )}
                 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono (WhatsApp)</label>
-                  <input 
-                    type="tel" 
-                    value={manualData.telefono}
-                    onChange={e => setManualData({...manualData, telefono: e.target.value})}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." 
-                  />
+                  <input type="tel" value={manualData.telefono} onChange={e => setManualData({...manualData, telefono: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="+52..." />
                 </div>
 
-                {/* Nuevo campo de Observaciones */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Observaciones (Opcional)</label>
-                  <input 
-                    type="text" 
-                    value={manualData.observaciones}
-                    onChange={e => setManualData({...manualData, observaciones: e.target.value})}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: VIP, Mesa 1, Compañero de trabajo..." 
-                  />
+                  <input type="text" value={manualData.observaciones} onChange={e => setManualData({...manualData, observaciones: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100" placeholder="Ej: VIP, Mesa 1, Compañero de trabajo..." />
                 </div>
                 
-                <button 
-                  onClick={handleGuardarManual}
-                  disabled={isSaving}
-                  className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all"
-                >
+                <button onClick={handleGuardarManual} disabled={isSaving} className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all">
                   {isSaving ? 'Guardando...' : 'Guardar Invitado'}
                 </button>
               </div>
@@ -12443,6 +12664,210 @@ export default function InvitadosTab({ evento }: { evento: any }) {
 
     </div>
   );
+}
+</file>
+
+<file path="prisma/schema.prisma">
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. GESTIÓN DE USUARIOS DE LA PLATAFORMA
+// ==========================================
+
+model User {
+  id                String               @id @default(uuid())
+  email             String               @unique
+  passwordHash      String
+  nombre            String
+  apellido          String
+  isSuperAdmin      Boolean              @default(false)
+  emailVerificado   Boolean              @default(false)
+  verificationToken String?              
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  
+  // 🚀 NUEVO: Relación directa con los eventos que este usuario ha creado (Dueño)
+  eventosCreados    Event[]              @relation("EventOwner")
+  
+  // Relación con los eventos donde este usuario colabora (Invitado por otros)
+  members           EventMember[] 
+  passwordResets    PasswordResetToken[] 
+}
+
+// Nueva tabla para el control de expiración de restablecimiento de claves
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expires   DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+enum EventRole {
+  // Bodas
+  NOVIA
+  NOVIO
+  
+  // 15 Años y Cumpleaños
+  QUINCEANERA
+  CUMPLEANERO
+  ANFITRION
+  PAREJA_DEL_FESTEJADO
+  
+  // Padres (15 Años, Bautizos, Baby Showers, Comuniones)
+  MAMA_DEL_FESTEJADO
+  PAPA_DEL_FESTEJADO
+  
+  // Logística y General
+  WEDDING_PLANNER
+  ORGANIZADOR
+  ADMIN
+
+  PERSONALIZADO // <-- Agregamos esta opción para mapear cuando el usuario invente el rol
+}
+
+enum MemberStatus {
+  INVITADO    // El correo fue invitado pero aún no se registra/acepta
+  ACEPTADO    // Ya es miembro activo y puede co-gestionar el evento
+}
+
+// Tabla pivote para control de acceso colaborativo y roles en el evento
+model EventMember {
+  id               String       @id @default(uuid())
+  eventId          String
+  userId           String?
+  correoInvitado   String       
+  role             EventRole
+  rolPersonalizado String?      
+  status           MemberStatus @default(INVITADO) 
+  event            Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+
+  @@unique([eventId, correoInvitado])
+}
+
+// ==========================================
+// 2. EL EVENTO (MULTIPLATAFORMA INTELIGENTE)
+// ==========================================
+
+enum EventType {
+  BODA
+  QUINCEANOS
+  CUMPLEANOS
+  BABY_SHOWER
+  GRADUACION
+  PRIMERA_COMUNION
+  BAUTIZO
+  OTRO
+}
+
+model Event {
+  id                        String              @id @default(uuid())
+  titulo                    String              
+  tipo                      EventType           @default(BODA) 
+  fecha                     DateTime
+  slug                      String              @unique 
+  colorPrincipal            String?             @default("#9333ea")
+  ubicacionCeremonia        String?             
+  mapUrlCeremonia           String?
+  ubicacionRecepcion        String              
+  mapUrlRecepcion           String?
+  configPermiteAcompanantes Boolean             @default(true) 
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  
+  // 🚀 NUEVO: Campo obligatorio que amarra el evento a su creador original
+  ownerId                   String
+  owner                     User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members                   EventMember[]
+  invitados                 InvitadoPrincipal[]
+  template                  InvitationTemplate?
+}
+
+model InvitationTemplate {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Estructura dinámica de diseño (Fuentes, colores, estilos de sobre, sello de cera, música)
+  estilos   Json     
+  
+  // Estructura de bloques activos (Texto de bienvenida, itinerario, dress code, mapas)
+  bloques   Json     
+  
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// 3. GESTIÓN DE INVITADOS (ESTRUCTURA RSVP)
+// ==========================================
+
+enum RsvpStatus {
+  PENDIENTE
+  CONFIRMADO
+  RECHAZADO
+}
+
+// El grupo o familia (quien recibe el enlace único)
+model InvitadoPrincipal {
+  id                String       @id @default(cuid())
+  eventId           String
+  codigoAcceso      String       @unique
+  nombreFamilia     String
+  telefono          String?      // Para el link de WhatsApp
+  pasesTotales      Int          @default(1) // Por defecto 1 (Individual)
+  statusRSVP        RsvpStatus   @default(PENDIENTE)
+  mensajeEnviado    Boolean      @default(false) // Rastreador de WhatsApp
+  invitadoDe        String?      // "NOVIA" o "NOVIO"
+  fechaConfirmacion DateTime?
+  observaciones     String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  asistentes  Asistente[]
+  paseDigital PaseDigital?
+}
+
+// Desglose individual de quién asiste realmente dentro del grupo
+model Asistente {
+  id                  String            @id @default(uuid())
+  invitadoPrincipalId String
+  nombreCompleto      String
+  asiste              Boolean           @default(false)
+  menuSeleccionado    String?           // Ej: Tradicional, Vegano, Gluten-Free
+  restricciones       String?           // Alergias específicas médicas
+  cancionSugerida     String?
+  invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 4. SEGURIDAD: QR DINÁMICO Y ACCESO EN PUERTA
+// ==========================================
+
+model PaseDigital {
+  id                   String            @id @default(uuid())
+  invitadoPrincipalId  String            @unique
+  qrSecureToken        String            @unique // Token firmado que cambia/expira dinámicamente
+  asistentesEsperados  Int               // Total que confirmó asistir en ese grupo
+  asistentesIngresados Int               @default(0) // Cuántos han cruzado la puerta real
+  validado             Boolean           @default(false)
+  fechaValidacion      DateTime?
+  invitadoPrincipal    InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
 }
 </file>
 
@@ -12728,12 +13153,130 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
 
         {/* CONTENIDO DE LA PESTAÑA DE SOBRES MANTENIDO INTACTO */}
         {activeTab === 'sobres' && (
-          <div className="p-6">
-            <p className="text-zinc-500 text-sm">Configuración visual de tu sobre (Color, estilo de apertura, cera, etc.)</p>
-            {/* Aquí mantienes lo que ya tenías de los sobres */}
-          </div>
+          <div className="space-y-8 animate-in fade-in duration-200 pb-10 p-4">
+            
+            {/* 1. SELECCIÓN DEL COLOR DEL SOBRE */}
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Color del Sobre</h3>
+                <p className="text-[11px] text-zinc-500 font-light mt-0.5">Elige el color exterior del empaque.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 shadow-md shrink-0">
+                  <input
+                    type="color"
+                    value={template.estilos.envelope.color || '#18181b'}
+                    onChange={(e) => setTemplate(prev => ({
+                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
+                    }))}
+                    className="absolute -top-2 -left-2 w-14 h-14 cursor-pointer"
+                  />
+                   </div>
+                <input
+                  type="text"
+                  value={template.estilos.envelope.color || '#18181b'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, color: e.target.value } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-zinc-100 uppercase font-mono"
+                  maxLength={7}
+                />
+              </div>
+                </div>
+
+            <hr className="border-zinc-800" />
+              {/* 2. PATRÓN DE FONDO Y APERTURA */}
+            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Textura / Patrón</label>
+                <select
+                  value={template.estilos.envelope.pattern || 'none'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, pattern: e.target.value as any } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
+                >
+                  <option value="none">Liso (Sin textura)</option>
+                  <option value="botanical">Hojas Botánicas</option>
+                  <option value="floral">Puntos Florales</option>
+                  <option value="wheat">Espigas de Trigo</option>
+                  {/* 👇 NUEVA OPCIÓN PREMIUM 👇 */}
+                  <option value="real">Patrón Real (Grabado)</option>
+                </select>
+              </div>
+               <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Estilo de Apertura</label>
+                <select
+                  value={template.estilos.envelope.openingStyle || 'top'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, openingStyle: e.target.value as any } }
+                  }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-2 text-xs text-zinc-100"
+                >
+                  <option value="top">Solapa Superior (Clásica)</option>
+                  <option value="middle">Apertura Central</option>
+                  <option value="left">Solapa Izquierda</option>
+                  <option value="right">Solapa Derecha</option>
+                  <option value="vertical">Apertura Vertical Asimétrica (Premium)</option>
+                </select>
+              </div>
+               </div>
+
+            <hr className="border-zinc-800" />
+             {/* 3. SELECCIÓN DEL SELLO DE CERA */}
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Sello de Cera</h3>
+              </div>
+              
+              <div className="flex items-center gap-3 mb-4">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider w-24">Color del Sello:</label>
+                <input
+                  type="color"
+                  value={template.estilos.envelope.waxSealColor || '#b45309'}
+                  onChange={(e) => setTemplate(prev => ({
+                    ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealColor: e.target.value } }
+                  }))}
+                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
+                />
+              </div>
+               <div className="space-y-2.5">
+                {[
+                  { id: 'monogram', name: 'Monograma', desc: 'Iniciales clásicas entrelazadas' },
+                  { id: 'shield', name: 'Escudo Heráldico', desc: 'Escudo real con iniciales' },
+                  { id: 'rose', name: 'Rosa de Castilla', desc: 'Símbolo romántico clásico' },
+                  { id: 'lotus', name: 'Flor de Loto', desc: 'Elegancia orgánica' },
+                  { id: 'eucalyptus', name: 'Rama de Eucalipto', desc: 'Estilo botánico moderno' },
+                  { id: 'blank', name: 'Liso', desc: 'Sello de cera sin relieve' },
+                  { id: 'custom', name: 'Sello Original PNG', desc: 'Sello transparente cargado' }
+                ].map((seal) => (
+                  <button
+                    key={seal.id}
+                    type="button"
+                    onClick={() => setTemplate(prev => ({
+                      ...prev, estilos: { ...prev.estilos, envelope: { ...prev.estilos.envelope, waxSealDesign: seal.id as any } }
+                    }))}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${
+                      template.estilos.envelope.waxSealDesign === seal.id
+                        ? 'border-purple-500 bg-purple-500/5 text-purple-400'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-medium text-zinc-200">{seal.name}</span>
+                      <span className="text-[10px] text-zinc-500 font-light">{seal.desc}</span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border-2 transition-all ${
+                      template.estilos.envelope.waxSealDesign === seal.id ? 'border-purple-500 bg-purple-600' : 'border-zinc-700'
+                    }`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            </div>
         )}
       </div>
+
 
       {/* MODAL PARA EDITAR EVENTO DEL TIMELINE */}
       {editingEventIndex !== null && (
@@ -12773,7 +13316,9 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // 🚀 El submit ahora maneja varios estados de UI
+  const [isSubmitting, setIsSubmitting] = useState<false | 'loading' | 'success' | 'editing'>(false);
 
   const portadaImagen = bloques?.header?.coverPhoto || evento?.portadaUrl || "/portada-oval.jpg";
 
@@ -12784,12 +13329,20 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
       asiste: a.asiste || false,
       menuSeleccionado: a.menuSeleccionado || '',
       restricciones: a.restricciones || '',
+      cancionSugerida: a.cancionSugerida || '',
     }))
   );
+  
   const [observaciones, setObservaciones] = useState(invitacion.observaciones || '');
 
   const handleConfirmRSVP = async () => {
-    setIsSubmitting(true);
+    // 🚀 Lógica de "Culpa" emocional si se arrepienten de ir
+    if (invitacion.statusRSVP === 'CONFIRMADO' && formAsistentes[0]?.asiste === false) {
+      const seguro = window.confirm("¿Estás seguro? ¿Te vas a perder ese bonche? 😢");
+      if (!seguro) return;
+    }
+
+    setIsSubmitting('loading');
     try {
       const res = await fetch(`/api/rsvp/${codigoAcceso}`, {
         method: 'POST',
@@ -12802,12 +13355,11 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
 
       if (!res.ok) throw new Error('Error al enviar la confirmación');
       
+      setIsSubmitting('success');
       router.refresh();
-      alert('¡Confirmación enviada con éxito!');
     } catch (error) {
       console.error(error);
       alert('Hubo un error al confirmar. Intenta de nuevo.');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -12815,19 +13367,15 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#f4f4f2] font-sans @container">
       
-      {/* LA FOTO EXPANDIBLE */}
-      {/* 🛠️ Ajuste: left-[42%] en móvil para dar separación de la apertura, y @md:left-1/2 en PC */}
       <div className={`absolute z-10 transition-all duration-[1200ms] ease-[cubic-bezier(0.87,0,0.13,1)] overflow-hidden ${
         isOpen 
           ? 'top-0 left-0 w-full h-[45%] @md:h-[55%] translate-x-0 translate-y-0 rounded-none opacity-100' 
           : 'top-1/2 left-[42%] @md:left-1/2 w-[220px] @md:w-[320px] h-[320px] @md:h-[460px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] opacity-90 shadow-2xl'
       }`}>
         <img src={portadaImagen} alt="Portada" className="w-full h-full object-cover transition-transform duration-[2000ms] scale-105" />
-        {/* 👇 AQUÍ ESTÁ EL DEGRADADO MODIFICADO: Más bajito (h-[30%]) y pegado abajo */}
         <div className={`absolute bottom-0 left-0 w-full h-[30%] bg-gradient-to-t from-[#fdfdfc] via-[#fdfdfc]/80 to-transparent transition-opacity duration-1000 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
-      {/* EL SOBRE DIGITAL ANIMADO */}
       <div className={`absolute inset-0 transition-all duration-1000 ${isOpen ? 'z-0 opacity-0 pointer-events-none delay-700' : 'z-20 opacity-100'}`}>
         <EnvelopeSVG 
           isOpen={isOpen}
@@ -12841,114 +13389,119 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         />
       </div>
 
-      {/* LA INVITACIÓN INTERIOR */}
       <div className={`absolute inset-0 transition-opacity duration-1000 ${isOpen ? 'opacity-100 z-30 pointer-events-auto delay-500' : 'opacity-0 z-0 pointer-events-none'}`}>
         <div className="w-full h-full overflow-y-auto scrollbar-none relative bg-transparent flex flex-col">
           <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md text-white hover:bg-black/60 text-[10px] uppercase tracking-widest py-2 px-4 rounded-full font-medium transition-all shadow-lg">
             ↩ Cerrar
           </button>
-          
           <div className="shrink-0 h-[40%] @md:h-[50%]" />
-          
           <div className="shrink-0 w-full relative z-10 flex-1"> 
             <PearlElegance evento={evento} invitado={invitacion} onOpenRsvp={() => setIsRsvpModalOpen(true)} />
           </div>
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN (RSVP) */}
+      {/* 🚀 MODAL DE CONFIRMACIÓN (RSVP) EMOCIONAL E INTELIGENTE */}
       {isRsvpModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-[#fdfdfc] p-8 rounded-3xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-none">
               
-              <div className="text-center mb-8">
-                 <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
-                 <p className="text-xs text-zinc-500 mt-2">Pase individual exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
-              </div>
+              {/* Pantalla 1: Éxito (Mensajes Emocionales) */}
+              {isSubmitting === 'success' ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-4 text-center animate-in zoom-in-95 duration-300">
+                  <div className="text-5xl mb-2">
+                    {formAsistentes[0]?.asiste ? '🎉' : '🤍'}
+                  </div>
+                  <h3 className="text-xl font-serif text-zinc-800 px-4">
+                    {formAsistentes[0]?.asiste 
+                      ? (invitacion.statusRSVP === 'RECHAZADO' ? '¡Qué emoción! Sabíamos que no te lo perderías ✨' : '¡Lo sabíamos! Eres especial para nosotros, no podemos esperar a verte allí ese día ✨')
+                      : 'Lamentamos mucho que no nos acompañes. Tu respuesta ha sido guardada.'}
+                  </h3>
+                  <button onClick={() => setIsRsvpModalOpen(false)} className="mt-6 px-8 py-3 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all">
+                    Volver a la invitación
+                  </button>
+                </div>
+              ) : 
 
-              {!isSubmitting ? (
-                <div className="space-y-6">
-                  {/* BOTONES PRINCIPALES SÍ/NO */}
+              /* Pantalla 2: Cargando */
+              isSubmitting === 'loading' ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
+                  <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
+                  <p className="text-sm font-medium text-zinc-500">Procesando respuesta...</p>
+                </div>
+              ) : 
+
+              /* Pantalla 3: Ya había confirmado (Bloqueo inicial con opción a editar) */
+              (invitacion.statusRSVP !== 'PENDIENTE' && isSubmitting !== 'editing') ? (
+                <div className="text-center space-y-6 animate-in fade-in duration-300">
+                  <h2 className="text-2xl font-serif text-zinc-800">Ya has respondido</h2>
+                  <p className="text-sm text-zinc-600">
+                    Actualmente registraste tu asistencia como: <br/>
+                    <strong className={`text-lg mt-2 inline-block ${invitacion.statusRSVP === 'CONFIRMADO' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {invitacion.statusRSVP === 'CONFIRMADO' ? '¡Sí asistiré!' : 'No podré asistir'}
+                    </strong>
+                  </p>
+                  <div className="pt-4 flex flex-col gap-3">
+                    <button onClick={() => setIsSubmitting('editing')} className="w-full py-4 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all hover:bg-zinc-800">
+                      Cambiar mi respuesta
+                    </button>
+                    <button onClick={() => setIsRsvpModalOpen(false)} className="w-full py-3 bg-transparent text-zinc-400 rounded-xl text-xs font-bold transition-all hover:text-zinc-600">
+                      Cerrar ventana
+                    </button>
+                  </div>
+                </div>
+              ) :
+
+              /* Pantalla 4: Formulario Nuevo o en Modo de Edición */
+              (
+                <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+                  <div className="text-center mb-8">
+                    <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
+                    <p className="text-xs text-zinc-500 mt-2">Pase individual exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
+                  </div>
+
+                  {/* BOTONES SÍ/NO */}
                   <div className="grid grid-cols-2 gap-4">
-                    <button 
-                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: true })))}
-                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === true ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-emerald-200'}`}
-                    >
+                    <button onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: true })))} className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === true ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-emerald-200'}`}>
                       <span className="text-xl">Sí</span>
                       <span className="text-[10px] uppercase tracking-wider">Acepto con gusto</span>
                     </button>
-                    <button 
-                      onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: false })))}
-                      className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === false ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-rose-200'}`}
-                    >
+                    <button onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: false })))} className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === false ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-rose-200'}`}>
                       <span className="text-xl">No</span>
                       <span className="text-[10px] uppercase tracking-wider">Declino con pesar</span>
                     </button>
                   </div>
 
-                  {/* FORMULARIO CONDICIONAL SI ASISTE */}
+                  {/* CAMPOS EXTRAS SI DICE QUE SÍ */}
                   {formAsistentes[0]?.asiste === true && (
                     <div className="space-y-5 animate-in slide-in-from-bottom-2 fade-in duration-300">
-                      
                       {bloques?.rsvpForm?.askDietary && (
                         <div className="space-y-2">
                           <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Restricciones alimentarias</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ej. Vegetariano, sin gluten..." 
-                            value={formAsistentes[0]?.restricciones || ''}
-                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].restricciones = e.target.value; return n; })}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
-                          />
+                          <input type="text" placeholder="Ej. Vegetariano, sin gluten..." value={formAsistentes[0]?.restricciones || ''} onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].restricciones = e.target.value; return n; })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400" />
                         </div>
                       )}
-
                       {bloques?.rsvpForm?.askSong && (
                         <div className="space-y-2">
                           <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Sugerencia de Canción</label>
-                          <input 
-                            type="text" 
-                            placeholder="¿Qué canción te haría bailar?" 
-                            value={formAsistentes[0]?.cancionSugerida || ''}
-                            onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].cancionSugerida = e.target.value; return n; })}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400"
-                          />
+                          <input type="text" placeholder="¿Qué canción te haría bailar?" value={formAsistentes[0]?.cancionSugerida || ''} onChange={(e) => setFormAsistentes((prev: any) => { const n = [...prev]; n[0].cancionSugerida = e.target.value; return n; })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-zinc-400" />
                         </div>
                       )}
-
                       <div className="space-y-2">
                         <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Un mensaje para nosotros</label>
-                        <textarea 
-                          placeholder="Déjanos tus buenos deseos (Opcional)" 
-                          value={observaciones}
-                          onChange={(e) => setObservaciones(e.target.value)}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm min-h-[80px] focus:outline-none focus:border-zinc-400"
-                        />
+                        <textarea placeholder="Déjanos tus buenos deseos (Opcional)" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm min-h-[80px] focus:outline-none focus:border-zinc-400" />
                       </div>
                     </div>
                   )}
 
-                  {/* BOTONES DE ACCIÓN FINAL */}
                   <div className="pt-4 flex flex-col gap-3">
-                    <button 
-                      onClick={handleConfirmRSVP} 
-                      disabled={formAsistentes[0]?.asiste === undefined || formAsistentes[0]?.asiste === null}
-                      className="w-full py-4 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 hover:bg-zinc-800"
-                    >
-                      Enviar Respuesta
+                    <button onClick={handleConfirmRSVP} disabled={formAsistentes[0]?.asiste === undefined || formAsistentes[0]?.asiste === null} className="w-full py-4 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 hover:bg-zinc-800">
+                      Confirmar y Enviar
                     </button>
-                    <button 
-                      onClick={() => setIsRsvpModalOpen(false)} 
-                      className="w-full py-3 bg-transparent text-zinc-400 rounded-xl text-xs font-bold transition-all hover:text-zinc-600"
-                    >
+                    <button onClick={() => setIsRsvpModalOpen(false)} className="w-full py-3 bg-transparent text-zinc-400 rounded-xl text-xs font-bold transition-all hover:text-zinc-600">
                       Cancelar
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="py-12 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
-                  <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
-                  <p className="text-sm font-medium text-zinc-500">Procesando tu respuesta...</p>
                 </div>
               )}
            </div>
@@ -12956,433 +13509,6 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
       )}
     </div>
   );
-}
-</file>
-
-<file path="src/components/templates/PearlElegance.tsx">
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { InvitationTemplateState, ItineraryItem } from '@/types/invitation';
-
-interface PearlEleganceProps {
-  evento: any;
-  invitado: any;
-  onOpenRsvp: () => void;
-}
-
-export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEleganceProps) {
-  const template: InvitationTemplateState = evento.template;
-  const { bloques } = template;
-  const accentColor = evento.colorPrincipal || '#d4af37'; 
-
-  // Controladores de visualización por bloque
-  const isHeaderEnabled = bloques.header?.enabled !== false;
-  const isCountdownEnabled = bloques.countdown?.enabled !== false;
-  const isLocationEnabled = bloques.venues?.enabled !== false;
-  const isDressCodeEnabled = bloques.dressCode?.enabled !== false;
-  const isItineraryEnabled = bloques.itinerary?.enabled !== false;
-  const isParentsEnabled = bloques.parents?.enabled !== false;
-  const isMenuEnabled = bloques.menu?.enabled !== false;
-  const isClosingEnabled = bloques.closingMessage?.enabled !== false;
-  const isRsvpDetailsEnabled = bloques.rsvpDetails?.enabled !== false;
-  const isGiftsEnabled = bloques.gifts?.enabled !== false;
-
-  const itineraryItems = bloques.itinerary?.items || [];
-  const venues = bloques.venues?.items || [];
-
-  // Lógica del Countdown Real
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  useEffect(() => {
-    if (!bloques.dateTime?.date) return;
-    const targetDate = new Date(`${bloques.dateTime.date}T${bloques.dateTime.time || '00:00'}`).getTime();
-
-    const interval = setInterval(() => {
-      const now = new Date().getTime();
-      const distance = targetDate - now;
-
-      if (distance < 0) {
-        clearInterval(interval);
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      setTimeLeft({
-        days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((distance % (1000 * 60)) / 1000),
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [bloques.dateTime?.date, bloques.dateTime?.time]);
-
-  // Partículas
-  const [particles, setParticles] = useState<any[]>([]);
-  useEffect(() => {
-    const colors = ['#a855f7', '#d4af37', '#10b981', '#fdf8f6']; 
-    const newParticles = Array.from({ length: 120 }).map((_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      duration: `${Math.random() * 10 + 10}s`, 
-      delay: `-${Math.random() * 20}s`, 
-      size: `${Math.random() * 3 + 1}px`, 
-      color: colors[Math.floor(Math.random() * colors.length)],
-      twinkleDuration: `${Math.random() * 2 + 1.5}s`, 
-    }));
-    setParticles(newParticles);
-  }, []);
-
-  return (
-    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
-      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-        <style>{`@keyframes fallDown { 0% { top: -5%; } 100% { top: 105%; } } @keyframes twinkle { 0% { transform: scale(0.5); opacity: 0.2; } 50% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(0.5); opacity: 0.2; } }`}</style>
-        {particles.map(p => <div key={p.id} className="absolute rounded-full" style={{ left: p.left, width: p.size, height: p.size, backgroundColor: p.color, boxShadow: `0 0 6px 1px ${p.color}`, animation: `fallDown ${p.duration} linear infinite ${p.delay}, twinkle ${p.twinkleDuration} ease-in-out infinite ${p.delay}` }} />)}
-      </div>
-
-      <div className="relative z-10 w-full max-w-sm mx-auto space-y-12 py-10">
-        
-        {/* ENCABEZADO Y NOMBRES */}
-        {isHeaderEnabled && (
-          <div className="space-y-6">
-            <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-400">{bloques.header?.welcomeText || 'Nuestra Boda'}</span>
-            <h1 className="text-4xl font-serif text-zinc-800 leading-tight">{bloques.header?.coupleNames}</h1>
-            {(bloques.header?.subtitle1 || bloques.header?.subtitle2) && (
-              <div className="text-xs text-zinc-500 italic space-y-1">
-                {bloques.header.subtitle1 && <p>{bloques.header.subtitle1}</p>}
-                {bloques.header.subtitle2 && <p>{bloques.header.subtitle2}</p>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* PADRES Y PADRINOS */}
-        {isParentsEnabled && (bloques.parents?.brideParents || bloques.parents?.groomParents) && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.parents.description || 'Con la bendición de nuestros padres'}</p>
-            {bloques.parents.brideParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.brideParents}</p>}
-            {bloques.parents.brideParents && bloques.parents.groomParents && <span className="text-xs text-zinc-400">&</span>}
-            {bloques.parents.groomParents && <p className="text-sm font-serif text-zinc-700">{bloques.parents.groomParents}</p>}
-          </div>
-        )}
-
-        {/* CUENTA REGRESIVA REAL */}
-        {isCountdownEnabled && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{bloques.countdown?.message || 'Faltan'}</p>
-             <div className="flex justify-center gap-6 text-zinc-700">
-                <div className="text-center"><span className="text-3xl font-light">{timeLeft.days}</span><p className="text-[9px] uppercase tracking-widest mt-1">Días</p></div>
-                <div className="text-center"><span className="text-3xl font-light">{timeLeft.hours}</span><p className="text-[9px] uppercase tracking-widest mt-1">Hrs</p></div>
-                <div className="text-center"><span className="text-3xl font-light">{timeLeft.minutes}</span><p className="text-[9px] uppercase tracking-widest mt-1">Min</p></div>
-                <div className="text-center"><span className="text-3xl font-light">{timeLeft.seconds}</span><p className="text-[9px] uppercase tracking-widest mt-1">Seg</p></div>
-             </div>
-             {bloques.dateTime?.showAddToCalendar !== false && (
-               <button className="mt-4 px-4 py-2 border border-zinc-300 rounded-full text-[10px] uppercase tracking-widest text-zinc-600 hover:bg-zinc-100 transition-colors">Añadir al Calendario</button>
-             )}
-          </div>
-        )}
-
-        {/* UBICACIONES (VENUES) */}
-        {isLocationEnabled && venues.length > 0 && (
-          <div className="space-y-8 pt-8 border-t border-zinc-200">
-             <h2 className="text-xl font-serif text-zinc-800">Ubicaciones</h2>
-             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-             {venues.map((venue, idx) => venue.enabled && (
-               <div key={idx} className="space-y-2">
-                 {venue.photoUrl && <img src={venue.photoUrl} alt={venue.name} className="w-full h-32 object-cover rounded-xl mb-4 shadow-md" />}
-                 <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-700">{venue.name}</h3>
-                 <p className="text-xs text-zinc-500 leading-relaxed">{venue.address} <br/> {venue.cityState}</p>
-                 {venue.mapLink && (
-                   <a href={venue.mapLink} target="_blank" rel="noreferrer" className="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-white bg-zinc-800 px-4 py-2 rounded-full">Ver en Mapa</a>
-                 )}
-               </div>
-             ))}
-          </div>
-        )}
-
-        {/* DRESS CODE */}
-        {isDressCodeEnabled && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-            <h2 className="text-xl font-serif text-zinc-800">Código de Vestimenta</h2>
-            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-            <p className="font-bold text-sm uppercase tracking-widest text-zinc-700">{bloques.dressCode?.style}</p>
-            <p className="text-xs text-zinc-500">{bloques.dressCode?.description}</p>
-          </div>
-        )}
-
-        {/* ITINERARIO VISUAL */}
-        {isItineraryEnabled && itineraryItems.length > 0 && (
-          <div className="space-y-6 pt-8 border-t border-zinc-200">
-            <h2 className="text-xl font-serif text-zinc-800">Itinerario</h2>
-            <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-            <div className="space-y-6 mt-6">
-              {itineraryItems.map((item: ItineraryItem, i: number) => (
-                <div key={i} className="flex flex-col items-center pb-4">
-                  {item.photoUrl && <img src={item.photoUrl} className="w-full h-24 object-cover rounded-xl mb-3 shadow-sm" alt={item.actividad} />}
-                  <span className="text-xs font-bold tracking-widest mb-1" style={{ color: accentColor }}>{item.hora}</span>
-                  <span className="text-sm font-serif text-zinc-800">{item.actividad}</span>
-                  {item.ubicacion && <span className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">{item.ubicacion}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* MENU */}
-        {isMenuEnabled && bloques.menu?.description && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-             <h2 className="text-xl font-serif text-zinc-800">Menú</h2>
-             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.menu.description}</p>
-          </div>
-        )}
-
-        {/* REGALOS */}
-        {isGiftsEnabled && bloques.gifts?.message && (
-          <div className="space-y-4 pt-8 border-t border-zinc-200">
-             <h2 className="text-xl font-serif text-zinc-800">Mesa de Regalos</h2>
-             <div className="w-8 h-px mx-auto" style={{ backgroundColor: accentColor }} />
-             <div className="text-3xl py-2">🎁</div>
-             <p className="text-xs text-zinc-500 whitespace-pre-wrap">{bloques.gifts.message}</p>
-          </div>
-        )}
-
-        {/* CIERRE Y RSVP */}
-        <div className="pt-12 pb-20">
-          {isClosingEnabled && <p className="text-sm font-serif italic text-zinc-600 mb-10">{bloques.closingMessage?.message}</p>}
-          
-          <button onClick={onOpenRsvp} className="px-8 py-3 bg-zinc-900 text-white text-xs uppercase tracking-widest hover:bg-zinc-800 transition-colors shadow-xl rounded-full w-full max-w-[250px]">
-            Confirmar Asistencia
-          </button>
-          
-          {isRsvpDetailsEnabled && (
-            <div className="mt-6 space-y-3">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                {bloques.rsvpDetails?.rsvpByText || 'Confirmar antes del:'} <span className="font-bold">{bloques.rsvpDetails?.deadlineDate}</span>
-              </p>
-              {bloques.rsvpDetails?.contactPhone && (
-                <a href={`tel:${bloques.rsvpDetails.contactPhone}`} className="inline-block text-[10px] text-zinc-500 border border-zinc-300 px-4 py-2 rounded-full uppercase tracking-widest hover:bg-zinc-100 transition-colors">
-                  📞 Llamar para más detalles
-                </a>
-              )}
-            </div>
-          )}
-
-          <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-12">
-            Invitación para: <br/>
-            <span className="font-bold text-zinc-600 text-xs mt-1 block">{invitado?.nombreFamilia || 'Invitado Especial'}</span>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="prisma/schema.prisma">
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
-datasource db {
-  provider = "postgresql"
-}
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-// ==========================================
-// 1. GESTIÓN DE USUARIOS DE LA PLATAFORMA
-// ==========================================
-
-model User {
-  id                String               @id @default(uuid())
-  email             String               @unique
-  passwordHash      String
-  nombre            String
-  apellido          String
-  isSuperAdmin      Boolean              @default(false)
-  emailVerificado   Boolean              @default(false)
-  verificationToken String?              
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  
-  // 🚀 NUEVO: Relación directa con los eventos que este usuario ha creado (Dueño)
-  eventosCreados    Event[]              @relation("EventOwner")
-  
-  // Relación con los eventos donde este usuario colabora (Invitado por otros)
-  members           EventMember[] 
-  passwordResets    PasswordResetToken[] 
-}
-
-// Nueva tabla para el control de expiración de restablecimiento de claves
-model PasswordResetToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  expires   DateTime
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-}
-
-enum EventRole {
-  // Bodas
-  NOVIA
-  NOVIO
-  
-  // 15 Años y Cumpleaños
-  QUINCEANERA
-  CUMPLEANERO
-  ANFITRION
-  PAREJA_DEL_FESTEJADO
-  
-  // Padres (15 Años, Bautizos, Baby Showers, Comuniones)
-  MAMA_DEL_FESTEJADO
-  PAPA_DEL_FESTEJADO
-  
-  // Logística y General
-  WEDDING_PLANNER
-  ORGANIZADOR
-  ADMIN
-
-  PERSONALIZADO // <-- Agregamos esta opción para mapear cuando el usuario invente el rol
-}
-
-enum MemberStatus {
-  INVITADO    // El correo fue invitado pero aún no se registra/acepta
-  ACEPTADO    // Ya es miembro activo y puede co-gestionar el evento
-}
-
-// Tabla pivote para control de acceso colaborativo y roles en el evento
-model EventMember {
-  id               String       @id @default(uuid())
-  eventId          String
-  userId           String?
-  correoInvitado   String       
-  role             EventRole
-  rolPersonalizado String?      
-  status           MemberStatus @default(INVITADO) 
-  event            Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user             User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt        DateTime     @default(now())
-
-  @@unique([eventId, correoInvitado])
-}
-
-// ==========================================
-// 2. EL EVENTO (MULTIPLATAFORMA INTELIGENTE)
-// ==========================================
-
-enum EventType {
-  BODA
-  QUINCEANOS
-  CUMPLEANOS
-  BABY_SHOWER
-  GRADUACION
-  PRIMERA_COMUNION
-  BAUTIZO
-  OTRO
-}
-
-model Event {
-  id                        String              @id @default(uuid())
-  titulo                    String              
-  tipo                      EventType           @default(BODA) 
-  fecha                     DateTime
-  slug                      String              @unique 
-  colorPrincipal            String?             @default("#9333ea")
-  ubicacionCeremonia        String?             
-  mapUrlCeremonia           String?
-  ubicacionRecepcion        String              
-  mapUrlRecepcion           String?
-  configPermiteAcompanantes Boolean             @default(true) 
-  createdAt                 DateTime            @default(now())
-  updatedAt                 DateTime            @updatedAt
-  
-  // 🚀 NUEVO: Campo obligatorio que amarra el evento a su creador original
-  ownerId                   String
-  owner                     User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  members                   EventMember[]
-  invitados                 InvitadoPrincipal[]
-  template                  InvitationTemplate?
-}
-
-model InvitationTemplate {
-  id        String   @id @default(uuid())
-  eventId   String   @unique
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  // Estructura dinámica de diseño (Fuentes, colores, estilos de sobre, sello de cera, música)
-  estilos   Json     
-  
-  // Estructura de bloques activos (Texto de bienvenida, itinerario, dress code, mapas)
-  bloques   Json     
-  
-  updatedAt DateTime @updatedAt
-}
-
-// ==========================================
-// 3. GESTIÓN DE INVITADOS (ESTRUCTURA RSVP)
-// ==========================================
-
-enum RsvpStatus {
-  PENDIENTE
-  CONFIRMADO
-  RECHAZADO
-}
-
-// El grupo o familia (quien recibe el enlace único)
-model InvitadoPrincipal {
-  id                String       @id @default(cuid())
-  eventId           String
-  codigoAcceso      String       @unique
-  nombreFamilia     String
-  telefono          String?      // Para el link de WhatsApp
-  pasesTotales      Int          @default(1) // Por defecto 1 (Individual)
-  statusRSVP        RsvpStatus   @default(PENDIENTE)
-  mensajeEnviado    Boolean      @default(false) // Rastreador de WhatsApp
-  invitadoDe        String?      // "NOVIA" o "NOVIO"
-  fechaConfirmacion DateTime?
-  observaciones     String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  asistentes  Asistente[]
-  paseDigital PaseDigital?
-}
-
-// Desglose individual de quién asiste realmente dentro del grupo
-model Asistente {
-  id                  String            @id @default(uuid())
-  invitadoPrincipalId String
-  nombreCompleto      String
-  asiste              Boolean           @default(false)
-  menuSeleccionado    String?           // Ej: Tradicional, Vegano, Gluten-Free
-  restricciones       String?           // Alergias específicas médicas
-  cancionSugerida     String?
-  invitadoPrincipal   InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
-}
-
-// ==========================================
-// 4. SEGURIDAD: QR DINÁMICO Y ACCESO EN PUERTA
-// ==========================================
-
-model PaseDigital {
-  id                   String            @id @default(uuid())
-  invitadoPrincipalId  String            @unique
-  qrSecureToken        String            @unique // Token firmado que cambia/expira dinámicamente
-  asistentesEsperados  Int               // Total que confirmó asistir en ese grupo
-  asistentesIngresados Int               @default(0) // Cuántos han cruzado la puerta real
-  validado             Boolean           @default(false)
-  fechaValidacion      DateTime?
-  invitadoPrincipal    InvitadoPrincipal @relation(fields: [invitadoPrincipalId], references: [id], onDelete: Cascade)
 }
 </file>
 

@@ -3,6 +3,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { InvitationTemplateState, ItineraryItem, VenueItem } from '@/types/invitation';
 import ImageUploader from '@/components/editor/ImageUploader';
+import AudioUploader from './AudioUploader'; // 👈 NUEVA IMPORTACIÓN
 
 interface PanelEdicionProps {
   template: InvitationTemplateState;
@@ -107,6 +108,39 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
                   <input type="text" placeholder="Subtítulo 2" value={template.bloques.header.subtitle2 || ''} onChange={(e) => updateBlock('header', { subtitle2: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
                 </div>
               )}
+            </div>
+
+            {/* SALUDO PERSONALIZADO */}
+            <div className="p-4 space-y-4 pt-6 border-t border-zinc-800/50">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Saludo al Invitado</h3>
+                  <p className="text-[10px] text-zinc-500">Muestra "Bienvenido [Nombre]" al abrir el sobre</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateBlock('header', { showGuestName: !template.bloques?.header?.showGuestName });
+                  }}
+                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 shrink-0 ${template.bloques?.header?.showGuestName ? 'bg-purple-600' : 'bg-zinc-700'}`}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${template.bloques?.header?.showGuestName ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* MÚSICA DE FONDO (SUBIDA DIRECTA) */}
+            <div className="p-4 space-y-4 pt-6 border-t border-zinc-800/50">
+              <div className="space-y-0.5 mb-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Música de Fondo</h3>
+                <p className="text-[10px] text-zinc-500">Esta canción sonará mientras abren el sobre.</p>
+              </div>
+              
+              <AudioUploader 
+                currentAudioUrl={template.bloques?.music?.mp3Url} 
+                onUploadSuccess={(url) => updateBlock('music', { mp3Url: url })} 
+              />
             </div>
 
             {/* 2. RSVP FORM OPTIONS */}

@@ -13,6 +13,7 @@ export interface HeaderBlock {
   welcomeText?: string;
   subtitle1?: string;
   subtitle2?: string;
+  showGuestName?: boolean; // 👈 NUEVO: Para el saludo
 }
 
 export interface RsvpFormBlock {
@@ -101,6 +102,10 @@ export interface GiftsBlock {
   message?: string;
 }
 
+export interface MusicBlock {
+  mp3Url?: string;
+}
+
 export interface TemplateBloques {
   header: HeaderBlock;
   rsvpForm?: RsvpFormBlock;
@@ -114,6 +119,7 @@ export interface TemplateBloques {
   closingMessage?: ClosingMessageBlock;
   rsvpDetails?: RsvpDetailsBlock;
   gifts?: GiftsBlock;
+  music?: MusicBlock; // 👈 NUEVO
 }
 
 export interface InvitationTemplateState {
