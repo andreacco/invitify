@@ -2,21 +2,26 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react'; // 👈 Importamos la sesión para el simulador
 import PearlElegance from '../templates/PearlElegance';
 import EnvelopeSVG from '../ui/EnvelopeSVG';
 
 export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
   const router = useRouter();
+  const { data: session } = useSession(); // 👈 Obtenemos al usuario actual
   
   const { event: evento, asistentes, codigoAcceso } = invitacion;
   const { template } = evento;
   const estilos = template?.estilos;
   const bloques = template?.bloques;
 
+  // 🚀 LÓGICA INTELIGENTE DE NOMBRE
+  const nombreInvitado = invitacion?.nombreFamilia || session?.user?.name || "Invitado Especial";
+
   const [isOpen, setIsOpen] = useState(false);
   const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false);
   
-  // 🚀 ESTADO Y REFERENCIA NATIVA PARA LA MÚSICA (Sin librerías pesadas)
+  // ESTADO Y REFERENCIA NATIVA PARA LA MÚSICA
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const mp3Url = bloques?.music?.mp3Url;
@@ -25,7 +30,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
   const portadaImagen = bloques?.header?.coverPhoto || evento?.portadaUrl || "/cover-oval.png";
 
   const [formAsistentes, setFormAsistentes] = useState(
-    asistentes.map((a: any) => ({
+    (asistentes || []).map((a: any) => ({
       id: a.id,
       nombreCompleto: a.nombreCompleto,
       asiste: a.asiste || false,
@@ -35,10 +40,10 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
     }))
   );
   
-  const [observaciones, setObservaciones] = useState(invitacion.observaciones || '');
+  const [observaciones, setObservaciones] = useState(invitacion?.observaciones || '');
 
   const handleConfirmRSVP = async () => {
-    if (invitacion.statusRSVP === 'CONFIRMADO' && formAsistentes[0]?.asiste === false) {
+    if (invitacion?.statusRSVP === 'CONFIRMADO' && formAsistentes[0]?.asiste === false) {
       const seguro = window.confirm("¿Estás seguro? ¿Te vas a perder este gran evento? 😢");
       if (!seguro) return;
     }
@@ -61,7 +66,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
     }
   };
 
-  // 🚀 FUNCIÓN ANTI-BUG PARA PAUSAR/REPRODUCIR
+  // FUNCIÓN ANTI-BUG PARA PAUSAR/REPRODUCIR MÚSICA
   const toggleMusic = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!audioRef.current) return;
@@ -79,7 +84,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#f4f4f2] font-sans @container">
       
-      {/* 1. PORTADA ORIGINAL INTACTA */}
+      {/* 1. PORTADA OVALADA */}
       <div className={`absolute z-10 transition-all duration-[1200ms] ease-[cubic-bezier(0.87,0,0.13,1)] overflow-hidden ${
         isOpen 
           ? 'top-0 left-0 w-full h-[45%] @md:h-[55%] translate-x-0 translate-y-0 rounded-none opacity-100' 
@@ -95,7 +100,6 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
           isOpen={isOpen}
           onOpen={() => {
             setIsOpen(true);
-            // Reproducir música automáticamente si el navegador lo permite
             if (mp3Url && audioRef.current) {
               audioRef.current.play()
                 .then(() => setIsPlaying(true))
@@ -112,7 +116,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
       </div>
 
       {/* 3. CONTENIDO DE LA INVITACIÓN SCROLLABLE */}
-      <div className={`absolute inset-0 transition-opacity duration-1000 ${isOpen ? 'opacity-100 z-30 pointer-events-auto delay-500' : 'opacity-0 z-0 pointer-events-none'}`}>
+      <div className={`absolute inset-0 transition-all duration-[1200ms] ease-[cubic-bezier(0.87,0,0.13,1)] ${isOpen ? 'opacity-100 z-30 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none translate-y-12'}`}>
         <div className="w-full h-full overflow-y-auto scrollbar-none relative bg-transparent flex flex-col">
           <button 
             onClick={() => {
@@ -126,8 +130,39 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
           
           <div className="shrink-0 h-[40%] @md:h-[50%]" />
           
-          <div className="shrink-0 w-full relative z-10 flex-1"> 
-            <PearlElegance evento={evento} invitado={invitacion} onOpenRsvp={() => setIsRsvpModalOpen(true)} />
+          {/* 🚀 FIX: Contenedor Maestro Unificado (Sin restricciones de altura para devolverle la vida al scroll) */}
+          <div className="w-full relative z-10 bg-[#fdfdfc] rounded-t-[30px] md:rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.12)]"> 
+
+            {/* 🚀 COREOGRAFÍA 1: SOLO EL NOMBRE ANIMADO */}
+            {bloques?.header?.showGuestName && (
+              <div 
+                className="w-full flex items-center justify-center pt-14 relative z-20 transition-all duration-[1200ms] ease-out"
+                style={{ 
+                  opacity: isOpen ? 1 : 0, 
+                  transform: isOpen ? 'scale(1)' : 'scale(0.92)', 
+                  filter: isOpen ? 'blur(0)' : 'blur(8px)',
+                  transitionDelay: isOpen ? '1s' : '0s'
+                }}
+              >
+                <h2 className="text-[2.5rem] leading-none font-serif text-[#2c2c2b] text-center px-6">
+                  {nombreInvitado}
+                </h2>
+              </div>
+            )}
+
+            {/* 🚀 COREOGRAFÍA 2: LA INVITACIÓN SE FUSIONA CON EL CONTENEDOR */}
+            <div 
+              className="w-full relative z-10 [&>div]:!rounded-t-none [&>div]:!shadow-none [&>div]:!bg-transparent transition-all duration-[1500ms] ease-out" 
+              style={{ 
+                opacity: isOpen ? 1 : 0, 
+                transform: isOpen ? 'translateY(0)' : 'translateY(15px)',
+                filter: isOpen ? 'blur(0)' : 'blur(4px)',
+                transitionDelay: isOpen ? (bloques?.header?.showGuestName ? '3s' : '0.8s') : '0s'
+              }}
+            >
+              <PearlElegance evento={evento} invitado={invitacion} onOpenRsvp={() => setIsRsvpModalOpen(true)} />
+            </div>
+            
           </div>
         </div>
       </div>
@@ -160,7 +195,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                 </div>
               ) : 
 
-              (invitacion.statusRSVP !== 'PENDIENTE' && isSubmitting !== 'editing') ? (
+              (invitacion?.statusRSVP && invitacion.statusRSVP !== 'PENDIENTE' && isSubmitting !== 'editing') ? (
                 <div className="text-center space-y-6 animate-in fade-in duration-300">
                   <h2 className="text-2xl font-serif text-zinc-800">Ya has respondido</h2>
                   <p className="text-sm text-zinc-600">
@@ -184,7 +219,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                 <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
                   <div className="text-center mb-8">
                     <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
-                    <p className="text-xs text-zinc-500 mt-2">Pase exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
+                    <p className="text-xs text-zinc-500 mt-2">Pase exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{nombreInvitado}</span></p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -233,7 +268,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         </div>
       )}
 
-      {/* ================= CONTROLES DE MÚSICA ================= */}
+      {/* ================= CONTROLES DE MÚSICA NATIVOS ================= */}
       {isOpen && mp3Url && (
         <button 
           onClick={toggleMusic}

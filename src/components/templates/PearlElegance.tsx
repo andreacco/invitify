@@ -74,7 +74,7 @@ export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEle
   }, []);
 
   return (
-    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
+    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 pt-1 flex flex-col items-center text-center relative overflow-hidden min-h-full">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         <style>{`@keyframes fallDown { 0% { top: -5%; } 100% { top: 105%; } } @keyframes twinkle { 0% { transform: scale(0.5); opacity: 0.2; } 50% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(0.5); opacity: 0.2; } }`}</style>

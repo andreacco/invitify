@@ -174,6 +174,7 @@ src/
     auth/
       DashboardGuard.tsx
     editor/
+      AudioUploader.tsx
       ImageUploader.tsx
       PanelEdicion.tsx
       SimuladorMovil.tsx
@@ -5082,6 +5083,118 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
 }
 </file>
 
+<file path="src/components/editor/AudioUploader.tsx">
+'use client';
+
+import { useState, useRef } from 'react';
+
+interface Props {
+  currentAudioUrl?: string;
+  onUploadSuccess: (url: string) => void;
+}
+
+export default function AudioUploader({ currentAudioUrl, onUploadSuccess }: Props) {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Usamos el mismo sistema que ya tienes en tu ImageUploader
+  const eventId = "boda-andrea-jose-2026"; 
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    
+    // 🛡️ ESCUDO 1: Validar que sea Audio
+    if (!file.type.includes('audio')) {
+      return alert('Por favor, selecciona un archivo de audio válido (MP3/WAV).');
+    }
+
+    // 🛡️ ESCUDO 2: Validar el peso (Máximo 8MB para que la invitación cargue rápido)
+    const MAX_MB = 8;
+    const maxSizeInBytes = MAX_MB * 1024 * 1024;
+    if (file.size > maxSizeInBytes) {
+      return alert(`La canción pesa ${(file.size / (1024*1024)).toFixed(1)}MB. El máximo permitido es ${MAX_MB}MB para garantizar que la invitación cargue rápido a tus invitados.`);
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('eventId', eventId);
+
+    try {
+      const response = await fetch('/api/event/upload', {
+        method: 'POST',
+        body: formData, 
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al subir la canción');
+      }
+
+      onUploadSuccess(data.url);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || 'Hubo un error al subir tu archivo de música.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  return (
+    <div className="space-y-2.5">
+      <div 
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        className={`relative h-28 border-2 border-dashed border-zinc-800 bg-zinc-950 rounded-xl overflow-hidden flex flex-col items-center justify-center cursor-pointer group transition-all select-none ${
+          isUploading ? 'opacity-60 cursor-not-allowed' : 'hover:border-purple-500/50'
+        }`}
+      >
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          accept="audio/mp3, audio/mpeg, audio/wav" 
+          className="hidden" 
+          disabled={isUploading}
+        />
+
+        {currentAudioUrl ? (
+          <div className="flex flex-col items-center justify-center space-y-2">
+            <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center text-xl shadow-sm border border-emerald-500/20 group-hover:scale-110 transition-transform">
+              🎵
+            </div>
+            <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-widest">
+              {isUploading ? 'Reemplazando...' : 'Audio Cargado y Listo'}
+            </span>
+            <div className="absolute inset-0 bg-zinc-950/80 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-white transition-opacity backdrop-blur-sm">
+              Subir nueva canción ⬆️
+            </div>
+          </div>
+        ) : (
+          <div className="text-center p-4 space-y-1">
+            <span className="text-2xl block group-hover:animate-bounce">🎧</span>
+            <span className="text-xs font-medium text-zinc-300 block">
+              {isUploading ? 'Procesando audio...' : 'Subir archivo MP3'}
+            </span>
+            <span className="text-[10px] text-zinc-500 font-light block">Formatos: MP3, WAV (Máx. 5MB)</span>
+          </div>
+        )}
+
+        {isUploading && (
+          <div className="absolute inset-0 bg-zinc-950/90 flex items-center justify-center flex-col gap-2">
+            <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest animate-pulse">Subiendo...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/components/editor/ImageUploader.tsx">
 'use client';
 
@@ -8531,16 +8644,6 @@ const eslintConfig = defineConfig([
 export default eslintConfig;
 </file>
 
-<file path="next.config.ts">
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
-};
-
-export default nextConfig;
-</file>
-
 <file path="pnpm-workspace.yaml">
 allowBuilds:
   '@prisma/engines': false
@@ -9123,81 +9226,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('ERROR_SAVE_TEMPLATE_API:', error);
     return NextResponse.json({ error: 'Error al guardar la plantilla.' }, { status: 500 });
-  }
-}
-</file>
-
-<file path="app/api/event/upload/route.ts">
-import { NextResponse } from 'next/server';
-import { requireVerifiedApiSession } from '@/lib/auth/session';
-import { createClient } from '@supabase/supabase-js';
-
-export const dynamic = 'force-dynamic';
-
-export async function POST(request: Request) {
-  try {
-    // 1. Validar variables de entorno en el momento de la petición
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ 
-        error: 'Configuración incompleta: Faltan credenciales de Supabase en el servidor.' 
-      }, { status: 500 });
-    }
-
-    // 2. Validar autenticación de sesión
-    const auth = await requireVerifiedApiSession();
-    if (!auth.ok) return auth.response;
-
-    // 3. Extraer el archivo del FormData
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const eventId = formData.get('eventId') as string;
-
-    if (!file || !eventId) {
-      return NextResponse.json({ error: 'Faltan parámetros obligatorios (archivo o eventId).' }, { status: 400 });
-    }
-
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'El archivo debe ser una imagen válida.' }, { status: 400 });
-    }
-
-    // 4. Inicializar el cliente de Supabase de forma segura
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // 5. Convertir archivo y preparar subida
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${eventId}/cover_${Date.now()}.${fileExtension}`;
-
-    const { data, error } = await supabase.storage
-      .from('invitaciones')
-      .upload(fileName, buffer, {
-        contentType: file.type,
-        upsert: true
-      });
-
-    if (error) {
-      console.error('SUPABASE_STORAGE_ERROR:', error);
-      return NextResponse.json({ error: 'Error al subir la imagen al almacenamiento.' }, { status: 500 });
-    }
-
-    // 6. Obtener URL pública
-    const { data: publicUrlData } = supabase.storage
-      .from('invitaciones')
-      .getPublicUrl(fileName);
-
-    return NextResponse.json({ 
-      message: 'Imagen subida con éxito.', 
-      url: publicUrlData.publicUrl 
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('UPLOAD_API_ERROR:', error);
-    return NextResponse.json({ error: 'Error interno del servidor al procesar la imagen.' }, { status: 500 });
   }
 }
 </file>
@@ -10937,6 +10965,21 @@ yarn-error.log*
 next-env.d.ts
 </file>
 
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '25mb', // Aumentamos la tubería a 25MB
+    },
+  },
+};
+
+export default nextConfig;
+</file>
+
 <file path="proxy.ts">
 /**
  * Capa 1 — Red de borde (Next.js 16 proxy).
@@ -11489,6 +11532,79 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('ERROR_LIST_INVITADOS_API:', error);
     return NextResponse.json({ error: 'Error al obtener la lista de invitados.' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/event/upload/route.ts">
+import { NextResponse } from 'next/server';
+import { requireVerifiedApiSession } from '@/lib/auth/session';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(request: Request) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: 'Faltan credenciales de Supabase en el servidor.' }, { status: 500 });
+    }
+
+    const auth = await requireVerifiedApiSession();
+    if (!auth.ok) return auth.response;
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const eventId = formData.get('eventId') as string;
+
+    if (!file || !eventId) {
+      return NextResponse.json({ error: 'Faltan parámetros obligatorios.' }, { status: 400 });
+    }
+
+    // 🚀 FIX: Ahora aceptamos tanto imágenes como audios
+    const isImage = file.type.startsWith('image/');
+    const isAudio = file.type.startsWith('audio/');
+
+    if (!isImage && !isAudio) {
+      return NextResponse.json({ error: 'El archivo debe ser una imagen (JPG/PNG) o un audio (MP3/WAV) válido.' }, { status: 400 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // 🚀 FIX: Nombramos el archivo de forma inteligente según si es música o foto
+    const fileExtension = file.name.split('.').pop() || (isAudio ? 'mp3' : 'jpg');
+    const prefix = isAudio ? 'music' : 'cover';
+    const fileName = `${eventId}/${prefix}_${Date.now()}.${fileExtension}`;
+
+    const { data, error } = await supabase.storage
+      .from('invitaciones')
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        upsert: true
+      });
+
+    if (error) {
+      console.error('SUPABASE_STORAGE_ERROR:', error);
+      return NextResponse.json({ error: 'Error al subir al almacenamiento.' }, { status: 500 });
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('invitaciones')
+      .getPublicUrl(fileName);
+
+    return NextResponse.json({ 
+      message: 'Archivo subido con éxito.', 
+      url: publicUrlData.publicUrl 
+    }, { status: 200 });
+
+  } catch (error) {
+    console.error('UPLOAD_API_ERROR:', error);
+    return NextResponse.json({ error: 'Error interno del servidor al procesar el archivo.' }, { status: 500 });
   }
 }
 </file>
@@ -12158,7 +12274,7 @@ export default function PearlElegance({ evento, invitado, onOpenRsvp }: PearlEle
   }, []);
 
   return (
-    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 flex flex-col items-center text-center relative overflow-hidden min-h-full">
+    <div className="bg-[#fdfdfc] rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] text-zinc-800 font-sans p-8 pt-1 flex flex-col items-center text-center relative overflow-hidden min-h-full">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }} />
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         <style>{`@keyframes fallDown { 0% { top: -5%; } 100% { top: 105%; } } @keyframes twinkle { 0% { transform: scale(0.5); opacity: 0.2; } 50% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(0.5); opacity: 0.2; } }`}</style>
@@ -12877,6 +12993,7 @@ model PaseDigital {
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { InvitationTemplateState, ItineraryItem, VenueItem } from '@/types/invitation';
 import ImageUploader from '@/components/editor/ImageUploader';
+import AudioUploader from './AudioUploader'; // 👈 NUEVA IMPORTACIÓN
 
 interface PanelEdicionProps {
   template: InvitationTemplateState;
@@ -12981,6 +13098,39 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
                   <input type="text" placeholder="Subtítulo 2" value={template.bloques.header.subtitle2 || ''} onChange={(e) => updateBlock('header', { subtitle2: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" />
                 </div>
               )}
+            </div>
+
+            {/* SALUDO PERSONALIZADO */}
+            <div className="p-4 space-y-4 pt-6 border-t border-zinc-800/50">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Saludo al Invitado</h3>
+                  <p className="text-[10px] text-zinc-500">Muestra "Bienvenido [Nombre]" al abrir el sobre</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateBlock('header', { showGuestName: !template.bloques?.header?.showGuestName });
+                  }}
+                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 shrink-0 ${template.bloques?.header?.showGuestName ? 'bg-purple-600' : 'bg-zinc-700'}`}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200 ${template.bloques?.header?.showGuestName ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* MÚSICA DE FONDO (SUBIDA DIRECTA) */}
+            <div className="p-4 space-y-4 pt-6 border-t border-zinc-800/50">
+              <div className="space-y-0.5 mb-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Música de Fondo</h3>
+                <p className="text-[10px] text-zinc-500">Esta canción sonará mientras abren el sobre.</p>
+              </div>
+              
+              <AudioUploader 
+                currentAudioUrl={template.bloques?.music?.mp3Url} 
+                onUploadSuccess={(url) => updateBlock('music', { mp3Url: url })} 
+              />
             </div>
 
             {/* 2. RSVP FORM OPTIONS */}
@@ -13301,29 +13451,37 @@ export default function PanelEdicion({ template, setTemplate }: PanelEdicionProp
 <file path="src/components/invitation/EnvelopeWrapper.tsx">
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react'; // 👈 Importamos la sesión para el simulador
 import PearlElegance from '../templates/PearlElegance';
 import EnvelopeSVG from '../ui/EnvelopeSVG';
 
 export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
   const router = useRouter();
+  const { data: session } = useSession(); // 👈 Obtenemos al usuario actual
   
-  const { event: evento, asistentes, paseDigital, codigoAcceso } = invitacion;
+  const { event: evento, asistentes, codigoAcceso } = invitacion;
   const { template } = evento;
   const estilos = template?.estilos;
   const bloques = template?.bloques;
 
+  // 🚀 LÓGICA INTELIGENTE DE NOMBRE (Si no hay invitado, usa tu nombre, si no, "Invitado Especial")
+  const nombreInvitado = invitacion?.nombreFamilia || session?.user?.name || "Invitado Especial";
+
   const [isOpen, setIsOpen] = useState(false);
   const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false);
   
-  // 🚀 El submit ahora maneja varios estados de UI
-  const [isSubmitting, setIsSubmitting] = useState<false | 'loading' | 'success' | 'editing'>(false);
+  // ESTADO Y REFERENCIA NATIVA PARA LA MÚSICA
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const mp3Url = bloques?.music?.mp3Url;
 
-  const portadaImagen = bloques?.header?.coverPhoto || evento?.portadaUrl || "/portada-oval.jpg";
+  const [isSubmitting, setIsSubmitting] = useState<false | 'loading' | 'success' | 'editing'>(false);
+  const portadaImagen = bloques?.header?.coverPhoto || evento?.portadaUrl || "/cover-oval.png";
 
   const [formAsistentes, setFormAsistentes] = useState(
-    asistentes.map((a: any) => ({
+    (asistentes || []).map((a: any) => ({
       id: a.id,
       nombreCompleto: a.nombreCompleto,
       asiste: a.asiste || false,
@@ -13333,12 +13491,11 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
     }))
   );
   
-  const [observaciones, setObservaciones] = useState(invitacion.observaciones || '');
+  const [observaciones, setObservaciones] = useState(invitacion?.observaciones || '');
 
   const handleConfirmRSVP = async () => {
-    // 🚀 Lógica de "Culpa" emocional si se arrepienten de ir
-    if (invitacion.statusRSVP === 'CONFIRMADO' && formAsistentes[0]?.asiste === false) {
-      const seguro = window.confirm("¿Estás seguro? ¿Te vas a perder ese bonche? 😢");
+    if (invitacion?.statusRSVP === 'CONFIRMADO' && formAsistentes[0]?.asiste === false) {
+      const seguro = window.confirm("¿Estás seguro? ¿Te vas a perder este gran evento? 😢");
       if (!seguro) return;
     }
 
@@ -13347,14 +13504,10 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
       const res = await fetch(`/api/rsvp/${codigoAcceso}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          respuestasAsistentes: formAsistentes,
-          observaciones,
-        }),
+        body: JSON.stringify({ respuestasAsistentes: formAsistentes, observaciones }),
       });
 
       if (!res.ok) throw new Error('Error al enviar la confirmación');
-      
       setIsSubmitting('success');
       router.refresh();
     } catch (error) {
@@ -13364,9 +13517,25 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
     }
   };
 
+  // FUNCIÓN ANTI-BUG PARA PAUSAR/REPRODUCIR MÚSICA
+  const toggleMusic = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(err => console.error("Autoplay bloqueado:", err));
+    }
+  };
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#f4f4f2] font-sans @container">
       
+      {/* 1. PORTADA OVALADA */}
       <div className={`absolute z-10 transition-all duration-[1200ms] ease-[cubic-bezier(0.87,0,0.13,1)] overflow-hidden ${
         isOpen 
           ? 'top-0 left-0 w-full h-[45%] @md:h-[55%] translate-x-0 translate-y-0 rounded-none opacity-100' 
@@ -13376,10 +13545,18 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         <div className={`absolute bottom-0 left-0 w-full h-[30%] bg-gradient-to-t from-[#fdfdfc] via-[#fdfdfc]/80 to-transparent transition-opacity duration-1000 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
+      {/* 2. SVG DEL SOBRE */}
       <div className={`absolute inset-0 transition-all duration-1000 ${isOpen ? 'z-0 opacity-0 pointer-events-none delay-700' : 'z-20 opacity-100'}`}>
         <EnvelopeSVG 
           isOpen={isOpen}
-          onOpen={() => setIsOpen(true)}
+          onOpen={() => {
+            setIsOpen(true);
+            if (mp3Url && audioRef.current) {
+              audioRef.current.play()
+                .then(() => setIsPlaying(true))
+                .catch(() => setIsPlaying(false));
+            }
+          }}
           color={estilos?.envelope?.color || '#18181b'}
           pattern={estilos?.envelope?.pattern || 'none'}
           openingStyle={estilos?.envelope?.openingStyle || 'vertical'}
@@ -13389,24 +13566,63 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
         />
       </div>
 
-      <div className={`absolute inset-0 transition-opacity duration-1000 ${isOpen ? 'opacity-100 z-30 pointer-events-auto delay-500' : 'opacity-0 z-0 pointer-events-none'}`}>
+      {/* 3. CONTENIDO DE LA INVITACIÓN SCROLLABLE */}
+      <div className={`absolute inset-0 transition-all duration-[1200ms] ease-[cubic-bezier(0.87,0,0.13,1)] ${isOpen ? 'opacity-100 z-30 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none translate-y-12'}`}>
         <div className="w-full h-full overflow-y-auto scrollbar-none relative bg-transparent flex flex-col">
-          <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md text-white hover:bg-black/60 text-[10px] uppercase tracking-widest py-2 px-4 rounded-full font-medium transition-all shadow-lg">
+          <button 
+            onClick={() => {
+              setIsOpen(false);
+              if (audioRef.current) { audioRef.current.pause(); setIsPlaying(false); }
+            }} 
+            className="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md text-white hover:bg-black/60 text-[10px] uppercase tracking-widest py-2 px-4 rounded-full font-medium transition-all shadow-lg"
+          >
             ↩ Cerrar
           </button>
+          
           <div className="shrink-0 h-[40%] @md:h-[50%]" />
-          <div className="shrink-0 w-full relative z-10 flex-1"> 
-            <PearlElegance evento={evento} invitado={invitacion} onOpenRsvp={() => setIsRsvpModalOpen(true)} />
+          
+          {/* El Recuadro Blanco Maestro (Fondo general unificado) */}
+          <div className="shrink-0 w-full relative z-10 flex-1 bg-[#fdfdfc] rounded-t-[30px] md:rounded-t-[40px] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.12)] overflow-hidden"> 
+
+            {/* 🚀 COREOGRAFÍA 1: SOLO EL NOMBRE */}
+            {bloques?.header?.showGuestName && (
+              <div 
+                className="w-full flex items-center justify-center pt-12  relative z-20 transition-all duration-[1200ms] ease-out"
+                style={{ 
+                  opacity: isOpen ? 1 : 0, 
+                  transform: isOpen ? 'scale(1)' : 'scale(0.92)', 
+                  filter: isOpen ? 'blur(0)' : 'blur(8px)',
+                  transitionDelay: isOpen ? '1s' : '0s'
+                }}
+              >
+                <h2 className="text-[2.5rem] leading-none font-serif text-[#2c2c2b] text-center px-6">
+                  {nombreInvitado}
+                </h2>
+              </div>
+            )}
+
+            {/* 🚀 COREOGRAFÍA 2: LA INVITACIÓN REAL A LOS 3 SEGUNDOS */}
+            <div 
+              className="w-full flex-1 relative z-10 [&>div]:!rounded-t-none [&>div]:!shadow-none [&>div]:!bg-transparent transition-all duration-[1500ms] ease-out" 
+              style={{ 
+                opacity: isOpen ? 1 : 0, 
+                transform: isOpen ? 'translateY(0)' : 'translateY(15px)',
+                filter: isOpen ? 'blur(0)' : 'blur(4px)',
+                transitionDelay: isOpen ? (bloques?.header?.showGuestName ? '3s' : '0.8s') : '0s'
+              }}
+            >
+              <PearlElegance evento={evento} invitado={invitacion} onOpenRsvp={() => setIsRsvpModalOpen(true)} />
+            </div>
+            
           </div>
         </div>
       </div>
 
-      {/* 🚀 MODAL DE CONFIRMACIÓN (RSVP) EMOCIONAL E INTELIGENTE */}
+      {/* ================= MODAL RSVP ================= */}
       {isRsvpModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-[#fdfdfc] p-8 rounded-3xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-none">
               
-              {/* Pantalla 1: Éxito (Mensajes Emocionales) */}
               {isSubmitting === 'success' ? (
                 <div className="py-12 flex flex-col items-center justify-center space-y-4 text-center animate-in zoom-in-95 duration-300">
                   <div className="text-5xl mb-2">
@@ -13414,7 +13630,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                   </div>
                   <h3 className="text-xl font-serif text-zinc-800 px-4">
                     {formAsistentes[0]?.asiste 
-                      ? (invitacion.statusRSVP === 'RECHAZADO' ? '¡Qué emoción! Sabíamos que no te lo perderías ✨' : '¡Lo sabíamos! Eres especial para nosotros, no podemos esperar a verte allí ese día ✨')
+                      ? '¡Qué emoción! Sabíamos que no te lo perderías ✨'
                       : 'Lamentamos mucho que no nos acompañes. Tu respuesta ha sido guardada.'}
                   </h3>
                   <button onClick={() => setIsRsvpModalOpen(false)} className="mt-6 px-8 py-3 bg-zinc-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all">
@@ -13423,7 +13639,6 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                 </div>
               ) : 
 
-              /* Pantalla 2: Cargando */
               isSubmitting === 'loading' ? (
                 <div className="py-12 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
                   <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
@@ -13431,8 +13646,7 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                 </div>
               ) : 
 
-              /* Pantalla 3: Ya había confirmado (Bloqueo inicial con opción a editar) */
-              (invitacion.statusRSVP !== 'PENDIENTE' && isSubmitting !== 'editing') ? (
+              (invitacion?.statusRSVP && invitacion.statusRSVP !== 'PENDIENTE' && isSubmitting !== 'editing') ? (
                 <div className="text-center space-y-6 animate-in fade-in duration-300">
                   <h2 className="text-2xl font-serif text-zinc-800">Ya has respondido</h2>
                   <p className="text-sm text-zinc-600">
@@ -13452,15 +13666,13 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                 </div>
               ) :
 
-              /* Pantalla 4: Formulario Nuevo o en Modo de Edición */
               (
                 <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
                   <div className="text-center mb-8">
                     <h2 className="text-2xl font-serif text-zinc-800">¿Nos acompaña?</h2>
-                    <p className="text-xs text-zinc-500 mt-2">Pase individual exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{invitacion?.nombreFamilia}</span></p>
+                    <p className="text-xs text-zinc-500 mt-2">Pase exclusivo para <br/><span className="font-bold text-zinc-800 text-sm">{nombreInvitado}</span></p>
                   </div>
 
-                  {/* BOTONES SÍ/NO */}
                   <div className="grid grid-cols-2 gap-4">
                     <button onClick={() => setFormAsistentes((prev: any[]) => prev.map((a: any) => ({ ...a, asiste: true })))} className={`py-4 rounded-2xl border-2 font-medium flex flex-col items-center gap-1 transition-all ${formAsistentes[0]?.asiste === true ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-600 hover:border-emerald-200'}`}>
                       <span className="text-xl">Sí</span>
@@ -13472,7 +13684,6 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
                     </button>
                   </div>
 
-                  {/* CAMPOS EXTRAS SI DICE QUE SÍ */}
                   {formAsistentes[0]?.asiste === true && (
                     <div className="space-y-5 animate-in slide-in-from-bottom-2 fade-in duration-300">
                       {bloques?.rsvpForm?.askDietary && (
@@ -13507,6 +13718,29 @@ export default function EnvelopeWrapper({ invitacion }: { invitacion: any }) {
            </div>
         </div>
       )}
+
+      {/* ================= CONTROLES DE MÚSICA NATIVOS ================= */}
+      {isOpen && mp3Url && (
+        <button 
+          onClick={toggleMusic}
+          className="fixed bottom-6 right-6 z-50 w-10 h-10 bg-black/40 backdrop-blur-md border border-white/10 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:bg-black/60 hover:scale-105 animate-in zoom-in duration-500 delay-1000"
+          title={isPlaying ? "Silenciar" : "Reproducir"}
+        >
+          {isPlaying ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 0 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" />
+              <path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 opacity-60">
+              <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM17.78 9.22a.75.75 0 1 0-1.06 1.06L18.44 12l-1.72 1.72a.75.75 0 1 0 1.06 1.06l1.72-1.72 1.72 1.72a.75.75 0 1 0 1.06-1.06L20.56 12l1.72-1.72a.75.75 0 1 0-1.06-1.06l-1.72 1.72-1.72-1.72Z" />
+            </svg>
+          )}
+        </button>
+      )}
+
+      {/* AUDIO NATIVO OCULTO */}
+      {mp3Url && <audio ref={audioRef} src={mp3Url} loop preload="auto" className="hidden" />}
     </div>
   );
 }
@@ -13528,6 +13762,7 @@ export interface HeaderBlock {
   welcomeText?: string;
   subtitle1?: string;
   subtitle2?: string;
+  showGuestName?: boolean; // 👈 NUEVO: Para el saludo
 }
 
 export interface RsvpFormBlock {
@@ -13616,6 +13851,10 @@ export interface GiftsBlock {
   message?: string;
 }
 
+export interface MusicBlock {
+  mp3Url?: string;
+}
+
 export interface TemplateBloques {
   header: HeaderBlock;
   rsvpForm?: RsvpFormBlock;
@@ -13629,6 +13868,7 @@ export interface TemplateBloques {
   closingMessage?: ClosingMessageBlock;
   rsvpDetails?: RsvpDetailsBlock;
   gifts?: GiftsBlock;
+  music?: MusicBlock; // 👈 NUEVO
 }
 
 export interface InvitationTemplateState {
